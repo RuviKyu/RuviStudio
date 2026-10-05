@@ -1,0 +1,64 @@
+# Ruvi Studio 3.12 — the whole pipeline on one PC
+
+One app: **Trello grab → packet zip → (the writing room) → package → stills + AI images → native render → the finished video.** No Adobe apps, no browser. Built from RUVI Conductor Special 2.3 + the Conductor's assembler; prompt-set **r18** (the writing room's docs and toolchain live in `writing-room/` of this repo).
+
+## The tree
+```
+<base>\<CHANNEL>\Titles\<n>. <Title>\
+    Script\            packet.zip (what you drop into the writing-room chat), the VO .mp3, the writing room's <Subject>_package.zip (unpacked here)
+    Hook\ Maps\ Reference images\ Characters\     the section stills (downloaded from the package's links)
+    AI Images\         001.jpg, 002.jpg … one per 20-second AI section, in order (generated outside from <Subject>_ai_prompts.txt)
+    Output\            <n>. <Title>.mp4 — THE WHOLE VIDEO (+ <n>. <Title>.txt, the YouTube description); parts\ is only the cache of rendered sections that re-runs reuse (Settings → keep parts off deletes it after the final)
+    Project\ Assets\
+<base>\<CHANNEL>\Music\     the channel's tracks (2–5 min each); _library_index.json + _profiles\ are written by the app
+```
+Channels: `BILGERATS`, `SCURVYDOGS`, `OLDWORLDPROOF` (the suffix file names them `[BILGE RATS]` `[SCURVY DOGS]` `[OLDWORLDPROOF]`).
+
+## A new root — everything heals itself
+Point `base` at any folder (Settings → base folder, or `studio.config.json`). At every start, whenever the base changes, and on **heal tree**, the app creates what is missing and never touches what exists: `_SECRETS\secrets.json` (a template with empty `trelloKey` / `trelloToken` / `boardId` — fill it in; the banner says so until you do), `_RUVI PROJECT FILES\Channel_Prompt_Suffixes.txt` (the r16 file ships inside the app; an older file on disk is flagged, not overwritten), `_RUNTIME\`, every channel named in the suffix file as `BILGERATS\`, `SCURVYDOGS\`, `OLDWORLDPROOF\` each with `Titles\` and `Music\`, and every title's own folders. Old flat titles (`<CHANNEL>\<n. Title>`) are moved into `Titles\`. The whisper runtime is rebuilt under the new `_RUNTIME\` on first use.
+
+## Self-contained
+Everything the app needs lives inside its own folder and moves with it: portable Node, ffmpeg, the Skia renderer package (`node_modules\`), the whisper runtime (`runtime\whisper`, its CPython in `runtime\cpython`, uv and its cache), the open fonts it draws with (`runtime\fonts`: Pirata One, Cinzel — Algerian is read from Windows itself), Chrome for Testing if ever needed, logs, temp files, the grab shim and `studio.config.json`. Nothing is installed into Windows, the user profile or the system temp. Move or copy the folder anywhere and start it: a moved whisper runtime re-points itself in a second. The only things outside the folder are *your* data under the base root — and, by choice (`grab.shareRuntime`, on by default), one junction `<base>\_RUNTIME\python` → the app's whisper runtime so the Adobe extension can use it too.
+
+## The UI (3.6)
+A compact dashboard: a 12-column grid of cells, each with one purpose and an icon — Trello grab · Rendering · Titles · Final video · Render engine · Voice & ambience · Grab & whisper · Paths & contact — and the UPSCALER tab with its own three cells (Upscaler · AI images per title · The web UI). Inline Tabler-style SVG icons (no web fonts), an 11/12/13/15 type scale, the RUVI theme (Share Tech Mono, cyan/magenta, scanlines). **tour** in the header walks through every cell with a card, dots and next/back/skip (← → Enter Esc); everything but the cell in question is dimmed and the cell gets a pulsing neon frame; it opens by itself on the first visit. **Sounds** (synthesized, no files; 🔊/🔇 in the header): a blip on every button, a chime when any job finishes — render, image fetch, grab, upscale — and a low buzz on a failure. The **pixel progress bar** fixed at the bottom shows the running job's kind, count, percentage and current step at all times (green when the last job finished, red when it failed, dim when idle).
+
+## Run
+Double-click **`Ruvi Studio.bat`** → http://localhost:4710. The app provisions everything it needs itself (portable Node, ffmpeg, the Skia renderer package, whisper + CUDA runtime under `<base>\_RUNTIME\`), and the chips show what is ready.
+
+## The flow
+1. **Trello grab** (top card): scan → tick cards → grab. Builds the title tree, downloads docx / VO / cover, makes the word-level SRT (whisper on the GPU), analyses the channel's Music folder, and writes **`Script\packet.zip`** with everything: README, script .docx, word-level SRT, whisper's words JSON, suffix file, cover, `_library_index.json`, `_music_profiles.json`. The loose duplicates are removed — `Script\` keeps only `packet.zip` and the VO .mp3 (the render needs it). A re-grab restores what it needs from the zip, so whisper never runs twice. `grab.looseFiles: true` keeps the loose copies instead.
+2. **Writing room**: drop `packet.zip` into a new chat of the RUVI STUDIO Claude Project. It returns **one** file, `<Subject>_package.zip`, which you save into `Script\`.
+3. **AI images**: the package holds `<Subject>_ai_prompts.txt` (one prompt per line, AI IMAGE order) and a `.csv` twin — import into TurboFlow (or any Google-Flow bulk tool), generate, then press **AI import** on the title and point it at the download folder: files are taken in name order and become `AI Images\001.jpg …`. Names with a suffix after the index are fine (`001_painted.jpg`, `001-upscaled.png`), any size or aspect (1376×768, 3440×1920 …): the still is scaled to cover the frame, never stretched. The row shows `AI have/need`; a title with missing AI images is not ready. Each AI section is rendered natively like the maps — a slow push plus a glide in the PAN direction the writing room chose (N S E W NE NW SE SW), drawn with sub-pixel transforms so the motion is perfectly even.
+4. The package's `<Subject>_description.txt` (the YouTube description written from the channel's template, with a PINNED COMMENT line where the channel keeps its ebook link in the first comment) is copied next to the finished video as `Output\<n. Title>.txt`.
+
+**RUN**: unpack the package (bundle → `Maps\` too) → fetch the stills (the Adobe extension's downloader: heal from the tree, copies from sibling titles, persistent rounds) → render every HOOK / MAP / REF / CHAR natively into `Output\parts\` (parallel workers, NVENC) → Ken Burns the AI images → one final pass: **fade to black at every cut**, **cinematic letterbox**, the voice-over with the **music remix** ducked under it, **1080p 30 or 60 fps** → `Output\<n>. <Title>.mp4`.
+
+## CTA inserts
+Drop a channel's CTA clips (their own animation + narration) into `<CHANNEL>\CTA\` — `CTA 1 …`, `CTA 2 …` in name order. At assembly, CTA 1 goes in at the section start nearest **20 %** of the narration and CTA 2 at the one nearest **50 %** (`cta.positions`, or a per-channel list in `cta.byChannel`, e.g. `{"OLDWORLDPROOF": [0.25, 0.6]}`). Section starts are sentence ends by the writing room's rule, so the narration pauses cleanly, the clip plays with its own voice, and the narration resumes on the next section. Fades to black on both sides, the letterbox stays, the music bed runs through the clip (ducked under its voice) and the final length grows by the clips. A channel with no clips gets none; the title row shows `CTA ×n`. `cta.enabled: false` switches inserts off.
+
+## CTA inserts
+Each channel's clips live in `<CHANNEL>\CTA\` (`CTA 1 …`, `CTA 2 …`, any of mp4/mov/mkv). On all three channels CTA 1 goes in at the section start nearest 20 % of the narration and CTA 2 at the one nearest 50 % (`cta.positions`; a `cta.byChannel` entry overrides one channel). The narration pauses for the clip and resumes on the next section — section starts are sentence ends — the clip's own voice plays, the music bed runs on underneath, ducked, and the clip is fitted **inside the letterbox window** so the bars never cover its QR code. The packet's `_cta.json` tells the writing room the extra seconds so the remix is planned for narration + CTAs. **refresh music & CTA** rewrites every grabbed title's packet when clips or tracks change.
+
+## Ambience (no music since 3.4)
+Each track in `<CHANNEL>\Music\` is analysed once (cached): BPM, bar grid, per-bar loudness and **chroma** (pitch classes → key), sections, energy and **mood tags**, safe cut points. The index (a few KB) and the profiles travel in the packet; the writing room picks the track by mood and plans the remix on its bars; the app renders it (cuts on bars, intro first, real ending last, jumps on similar loudness *and* harmony, short crossfades) and ducks it under the voice.
+
+## UPSCALER tab — Ruvi's Batch Oil Upscaler
+The second tab drives your Vercel → RunPod upscaler without the browser. Put the deployment URL in the tab (plus an optional positive prompt and how many images to send at a time), and every title with raw AI images shows a **raw / painted** count and an **upscale** button (the Studio rows get one too). The job follows the web UI's contract exactly — `POST /api/run` with the embedded ComfyUI workflow (the image name in node 5, your prompt placed before the base prompt, a fresh seed per image) and `GET /api/status?jobId=…` polled every 2.5 s — writes each result beside the original as `<n>_painted.<ext>` (base64 or S3 URL, whichever the worker returns), moves the originals into `AI Images\_raw\`, and the section renderer picks the painted files up by their index. Failed images stay as originals; press upscale again to retry just those. Progress and logs appear in the Rendering card like any other job; the web UI itself can be opened in a window or embedded in the tab for one-off batches. **Channels** that get painted are switches in the Upscaler cell (OLDWORLDPROOF off by default — its images stay as generated). The **ComfyUI workflow** cell shows the worker's nodes on a canvas like ComfyUI's own — checkpoint, VAE, LoRA, upscale model, positive/negative, every Ultimate SD Upscale parameter — editable; save, and every later upscale sends that workflow (reset returns to the bundled one). The image name, the prompt prefix and a fresh seed are filled in per image.
+
+## Re-runs
+RE-RUN on a finished title reuses every rendered part (their recipes still match) and only redoes what changed: new AI images, the ambience bed, the final pass. Changing the ambience level, the letterbox, the CTAs or the description therefore costs minutes, not hours. **re-render all** (in the row of a finished title) is the only thing that re-renders the parts from scratch.
+
+## Settings
+final video (30 / 60 fps) · letterbox (none / 1.85 / 2.00 / 2.20 / 2.39) · music level · encoder (auto NVENC / x264) · workers · engine (native / chrome) · table lean · highlight style · macro lens · whisper model / device · chat URL · Wikimedia contact · base folder.
+
+## Also
+- **archive** sets a title aside (it leaves to-do; *run all* skips it); **heal title trees** adds missing folders; **index music** refreshes every channel's index.
+- **One queue for everything** (3.11): renders, image fetches, ambience fetches, upscales, grabs, packet refreshes and sound indexing all run one after another through the same queue, each with its own progress, log and place in the Rendering card and in the pixel bar — pressing *sfx* or *img* while a title renders just lines it up.
+- Logs: per job (log button) and global (`runtime\logs\`).
+- `node studio.js --all` renders every ready title headless.
+
+## This repository
+- The app is the root of the repo (`studio.js`, `lib/`, `ui/`, `assets/`, `launcher/`, `tools/`). Portable Node, ffmpeg, `node_modules\`, the whisper runtime, logs and `studio.config.json` are provisioned on the PC and ignored by git (`.gitignore`).
+- `writing-room/` is the Claude Project: `PROJECT_INSTRUCTIONS.md` (paste into the Project's instructions), the stage docs (`Video_*.md`), `Channel_Prompt_Suffixes.txt` (the same file as `assets/`), the toolchain (`scripts/`, `kit/`) and `tools/selftest_chain.py`. Connect the Project to this repo (Project → knowledge → GitHub → this repo → `writing-room/`) and press Sync after each push.
+- `publish.ps1` publishes the folder to an empty GitHub repo once; `sync.bat` commits and pushes every later change. `writing-room/CHANGELOG.md` records the prompt-set revisions.

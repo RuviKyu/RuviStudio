@@ -1,0 +1,17 @@
+# provisioned on the PC by the app itself — never in git
+node_modules/
+runtime/
+studio.config.json
+*.log
+logs/
+.cache/
+*.part.mp4
+# OS / editor noise
+Thumbs.db
+.DS_Store
+*.swp
+__pycache__/
+*.pyc
+# writing-room scratch (self-test output)
+writing-room/.selftest/
+/tmp/

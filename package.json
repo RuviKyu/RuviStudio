@@ -1,0 +1,19 @@
+{
+  "name": "ruvi-studio",
+  "version": "3.12.0",
+  "description": "Ruvi Studio — the whole history-video pipeline on one PC: Trello grab → packet zip → writing-room package → stills + AI images → native render → full video with fades, letterbox, VO and music remix. No Adobe apps, no browser.",
+  "main": "studio.js",
+  "scripts": {
+    "start": "node studio.js",
+    "all": "node studio.js --all"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
+    "puppeteer-core": "^23.11.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

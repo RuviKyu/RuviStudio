@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en" data-theme="ruvi">
+<head>
+<meta charset="utf-8" />
+<title>Ruvi Studio</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#070810; --panel:#0e0f18; --panel-2:#15161f; --line:#262732; --line-soft:#383a48; --text:#f0f1f6; --dim:#b0b5c2; --faint:#787d8c; --accent:#36e0ff; --accent2:#ff3fd1; --accent-hi:#9bf2ff; --good:#5dff9f; --warn:#ffd23f; --bad:#ff5d8a; --font:"Share Tech Mono",ui-monospace,Consolas,monospace; }
+  * { box-sizing:border-box; } html,body { margin:0; background:var(--bg); color:var(--text); font:13px/1.4 var(--font); }
+  body::before { content:""; position:fixed; inset:0; z-index:0; pointer-events:none; background:radial-gradient(120% 80% at 50% 0%, rgba(54,224,255,.10), transparent 60%), radial-gradient(90% 60% at 50% 100%, rgba(255,93,138,.07), transparent 60%), radial-gradient(140% 130% at 50% 50%, transparent 52%, rgba(0,0,0,.74)); }
+  body::after { content:""; position:fixed; inset:0; z-index:60; pointer-events:none; opacity:.16; background:repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0, rgba(0,0,0,0) 2px, rgba(34,52,120,.55) 3px, rgba(0,0,0,0) 4px); mix-blend-mode:screen; }
+  header, main { position:relative; z-index:1; }
+  header { display:flex; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line-soft); background:rgba(14,15,24,.92); position:sticky; top:0; z-index:5; flex-wrap:wrap; }
+  h1 { margin:0; font-family:"Press Start 2P","Share Tech Mono",monospace; font-size:12px; letter-spacing:1px; background:linear-gradient(90deg,#36e0ff 0%,#8a6cff 36%,#ff5fd2 64%,#ffd23f 100%); -webkit-background-clip:text; background-clip:text; color:transparent; filter:drop-shadow(0 0 7px rgba(54,224,255,.55)); }
+  h1::after { content:"_"; -webkit-text-fill-color:#9bf2ff; animation:blink 1.1s steps(1) infinite; } @keyframes blink { 50% { opacity:0 } }
+  .chip { font-size:11px; padding:2px 8px; border:1px solid var(--line-soft); color:var(--faint); text-transform:uppercase; letter-spacing:1px; } .chip.ok { color:var(--good); border-color:rgba(93,255,159,.45); } .chip.bad { color:var(--bad); border-color:rgba(255,93,138,.5); } .chip.busy { color:var(--warn); border-color:rgba(255,210,63,.5); }
+  .big { margin-left:auto; background:var(--accent); color:#04141a; border:0; padding:8px 16px; font:12px var(--font); text-transform:uppercase; letter-spacing:1px; cursor:pointer; box-shadow:0 0 12px rgba(54,224,255,.35); } .big:disabled { opacity:.45; cursor:default; box-shadow:none; }
+  main { padding:12px 16px; max-width:1500px; margin:0 auto; }
+  .toptabs { display:flex; gap:6px; margin:0 0 12px 0; }
+  .toptab { font-family:inherit; font-size:12px; letter-spacing:.14em; text-transform:uppercase; padding:8px 18px; background:var(--panel); color:var(--dim); border:1px solid var(--line); cursor:pointer; }
+  .toptab.on { color:var(--accent); border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .toptab b { color:var(--warn); margin-left:6px; }
+  .cfg-grid { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:end; }
+  .banner { border:1px solid rgba(255,210,63,.55); background:rgba(255,210,63,.06); padding:8px 12px; margin-bottom:10px; color:var(--warn); display:none; } .banner.bad { border-color:rgba(255,93,138,.6); color:var(--bad); background:rgba(255,93,138,.06); }
+  .banner .pbar { height:3px; background:rgba(255,255,255,.08); margin-top:6px; } .banner .pbar i { display:block; height:100%; background:var(--warn); }
+  .card { border:1px solid var(--line-soft); background:var(--panel); padding:10px 12px; margin-bottom:12px; }
+  .label { text-transform:uppercase; letter-spacing:1px; color:var(--accent-hi); font-size:11px; margin:0 0 8px; } .label::before { content:"> "; color:var(--accent); }
+  .tools { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  .tab { background:transparent; color:var(--dim); border:1px solid var(--line); padding:3px 9px; font:11px var(--font); text-transform:uppercase; letter-spacing:1px; cursor:pointer; } .tab.on { color:var(--accent-hi); border-color:var(--accent); } .tab b { color:var(--text); }
+  input[type=search], input[type=text], select { background:#0a0b12; color:var(--text); border:1px solid var(--line); padding:4px 7px; font:12px var(--font); } input[type=search] { min-width:220px; }
+  .btn { background:var(--panel-2); color:var(--text); border:1px solid var(--line-soft); padding:3px 9px; font:11px var(--font); text-transform:uppercase; letter-spacing:1px; cursor:pointer; white-space:nowrap; } .btn.acc { background:var(--accent); color:#04141a; border-color:transparent; } .btn:disabled { opacity:.4; cursor:default; }
+  .chan { display:flex; align-items:center; gap:8px; padding:6px 4px 4px; color:var(--accent); text-transform:uppercase; letter-spacing:1px; font-size:11px; user-select:none; } .chan small { color:var(--faint); text-transform:none; letter-spacing:0; }
+  table { width:100%; border-collapse:collapse; } td { padding:5px 6px; border-top:1px solid var(--line); vertical-align:middle; }
+  td.n { width:34px; color:var(--faint); text-align:right; } td.t { max-width:0; } td.t .name { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; } td.t .why { display:block; color:var(--faint); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  td.c { width:150px; white-space:nowrap; color:var(--dim); font-size:11px; } td.c b { color:var(--text); font-weight:normal; }
+  td.s { width:88px; } td.a { width:190px; text-align:right; white-space:nowrap; }
+  .st { display:inline-block; min-width:74px; text-align:center; font-size:10px; padding:2px 6px; border:1px solid var(--line-soft); text-transform:uppercase; letter-spacing:1px; color:var(--faint); }
+  .st.ready { color:var(--good); border-color:rgba(93,255,159,.45); } .st.rendered { color:var(--good); border-color:rgba(93,255,159,.45); background:rgba(93,255,159,.07); } .st.partial { color:var(--warn); border-color:rgba(255,210,63,.45); } .st.notready { color:var(--bad); border-color:rgba(255,93,138,.5); } .st.running { color:var(--accent-hi); border-color:var(--accent); animation:pulse 1.2s infinite alternate; } .st.queued { color:var(--dim); } .st.done { color:var(--good); } .st.failed { color:var(--bad); border-color:rgba(255,93,138,.5); } .st.stopped, .st.cancelled { color:var(--warn); } .st.killed { color:var(--bad); }
+  @keyframes pulse { from { opacity:.55 } to { opacity:1 } }
+  tr.notready td.t .name { color:var(--dim); }
+  tr.detail td { background:var(--panel-2); border-top:0; padding:6px 10px 8px 46px; font-size:11px; color:var(--dim); }
+  .secs span { display:inline-block; margin:1px 6px 1px 0; color:var(--faint); } .secs span.done { color:var(--good); } .secs span.def { color:var(--warn); }
+  .prog { height:3px; background:rgba(255,255,255,.08); margin-top:4px; } .prog i { display:block; height:100%; background:var(--accent); }
+  .log { font-size:11px; color:#9fb0c0; background:#0a0b12; padding:6px 8px; margin-top:6px; max-height:140px; overflow:auto; white-space:pre-wrap; }
+  .empty { color:var(--faint); padding:10px 4px; }
+  details.cfg summary { cursor:pointer; color:var(--faint); text-transform:uppercase; letter-spacing:1px; font-size:11px; } .cfg label { display:inline-flex; flex-direction:column; gap:2px; font-size:11px; color:var(--faint); margin:6px 14px 4px 0; vertical-align:top; } .cfg input[type=text] { min-width:260px; }
+
+  /* ---- compact dashboard (Typescale 11/12/13/15, CSS Grid 12-col, Tabler-style inline icons) ---- */
+  .ic { width:14px; height:14px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; vertical-align:-2px; margin-right:5px; }
+  header { gap:10px; }
+  header .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  header .actions { margin-left:auto; display:flex; gap:6px; align-items:center; }
+  header .cursor { color:var(--accent2); animation: blink 1.1s steps(1) infinite; } @keyframes blink { 50% { opacity:0; } }
+  .btn.danger { color:var(--bad); }
+  .grid { display:grid; grid-template-columns:repeat(12, minmax(0,1fr)); gap:10px; }
+  .cell { grid-column: span 12; background:var(--panel); border:1px solid var(--line); padding:10px 12px; min-width:0; position:relative; }
+  .cell .label { margin:-2px 0 8px 0; display:flex; align-items:center; gap:4px; }
+  .cell .label .sub { color:var(--faint); text-transform:none; letter-spacing:0; font-size:11px; margin-left:4px; }
+  .cell .label .inline { margin-left:auto; display:flex; gap:4px; }
+  .cfgcell label { display:block; margin:0 0 7px 0; font-size:11px; color:var(--dim); }
+  .cfgcell label input[type=text], .cfgcell label select { display:block; width:100%; margin-top:3px; box-sizing:border-box; }
+  .cfgcell label input[size] { width:100%; }
+  .cfgcell .inline label { display:inline-block; width:auto; min-width:260px; margin-right:12px; }
+  .cfgcell .inline label input[type=text] { width:100%; }
+  .pathline { color:var(--faint); font-size:11px; margin:0 0 8px 2px; }
+  .hint { color:var(--faint); font-size:11px; margin-top:8px; }
+  .tools { gap:6px; }
+  .btn { padding:4px 9px; font-size:11px; }
+  .big { padding:6px 14px; font-size:12px; }
+  table.titles td { padding:4px 6px; }
+  @media (min-width: 900px) { .span3 { grid-column: span 3; } .span4 { grid-column: span 4; } .span5 { grid-column: span 5; } .span6 { grid-column: span 6; } .span7 { grid-column: span 7; } .span8 { grid-column: span 8; } .span12 { grid-column: span 12; } }
+  /* ---- the tour ---- */
+
+  #tour { position:fixed; inset:0; z-index:1002; pointer-events:none; }
+  .tour-card { position:absolute; width:340px; max-width:calc(100vw - 24px); background:var(--panel-2); border:1px solid var(--accent2); box-shadow:0 0 0 1px var(--accent2) inset, 0 20px 50px rgba(0,0,0,.6); padding:14px 16px; pointer-events:auto; font-size:12px; }
+  .tour-step { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent2); }
+  .tour-title { font-size:15px; color:var(--accent); margin:4px 0 6px 0; }
+  .tour-text { color:var(--text); line-height:1.5; }
+  .tour-dots { display:flex; gap:5px; margin:10px 0 8px 0; }
+  .tour-dots i { width:8px; height:4px; background:var(--line-soft); display:block; } .tour-dots i.on { background:var(--accent); width:18px; }
+  .tour-nav { display:flex; gap:6px; align-items:center; }
+
+  /* ---- tour mask: everything dimmed except the cell, with a neon frame ---- */
+  #tour-mask { position:fixed; inset:0; width:100vw; height:100vh; z-index:1000; pointer-events:none; }
+  #tour-neon { filter: drop-shadow(0 0 4px var(--accent2)) drop-shadow(0 0 12px var(--accent2)); animation: neon 1.4s ease-in-out infinite; }
+  @keyframes neon { 0%,100% { opacity:.55; filter: drop-shadow(0 0 3px var(--accent2)) drop-shadow(0 0 8px var(--accent2)); } 50% { opacity:1; filter: drop-shadow(0 0 6px var(--accent2)) drop-shadow(0 0 22px var(--accent2)) drop-shadow(0 0 40px var(--accent)); } }
+  .tour-target { position:relative; z-index:1001 !important; }
+  /* ---- the pixel progress bar, always on screen ---- */
+  #pixbar { position:fixed; left:0; right:0; bottom:0; z-index:900; background:var(--panel); border-top:1px solid var(--line); padding:5px 12px 6px 12px; display:flex; align-items:center; gap:12px; font-size:11px; }
+  #pixbar.idle { opacity:.55; }
+  .pix-track { position:relative; flex:1; height:14px; background: repeating-linear-gradient(90deg, #0b0c14 0 6px, #11131d 6px 8px); border:1px solid var(--line-soft); image-rendering:pixelated; overflow:hidden; }
+  .pix-fill { position:absolute; left:0; top:0; bottom:0; width:0%; background: repeating-linear-gradient(90deg, var(--accent) 0 6px, #0a3b48 6px 8px); box-shadow:0 0 10px var(--accent); transition: width .5s steps(8); }
+  #pixbar.busy.indet .pix-fill { width:30% !important; animation: pixslide 1.6s steps(24) infinite; }
+  @keyframes pixslide { 0% { left:-30%; } 100% { left:100%; } }
+  .pix-head { position:absolute; top:2px; width:8px; height:8px; background:var(--accent2); box-shadow:0 0 8px var(--accent2); display:none; animation: pixblink .35s steps(1) infinite; }
+  #pixbar.busy:not(.indet) .pix-head { display:block; }
+  @keyframes pixblink { 50% { opacity:.2; } }
+  .pix-label { min-width:260px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:48vw; }
+  #pixbar.busy .pix-label { color:var(--text); }
+  #pixbar.done .pix-fill { background: repeating-linear-gradient(90deg, var(--good) 0 6px, #0f3a1c 6px 8px); box-shadow:0 0 12px var(--good); }
+  #pixbar.failed .pix-fill { background: repeating-linear-gradient(90deg, var(--bad) 0 6px, #3a0f1c 6px 8px); }
+  main { padding-bottom:40px; }
+
+  /* ---- buttons are alive: colour shift + neon edge on hover, a press on click, focus ring for the keyboard ---- */
+  .btn, .big, .tab, .toptab { transition: color .15s ease, background-color .15s ease, border-color .15s ease, box-shadow .2s ease, transform .08s ease; will-change: transform; }
+  .btn:not(:disabled):hover { color: var(--accent); border-color: var(--accent); background: rgba(54,224,255, .07); box-shadow: 0 0 0 1px rgba(54,224,255, .35), 0 0 12px rgba(54,224,255, .35); transform: translateY(-1px); }
+  .btn.acc:not(:disabled):hover, .big:not(:disabled):hover { color: #0b0c14; background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 18px rgba(54,224,255, .6), 0 0 36px rgba(255, 63, 209, .25); }
+  .btn.danger:not(:disabled):hover { color: #fff; background: var(--bad); border-color: var(--bad); box-shadow: 0 0 14px rgba(255,93,138, .6); }
+  .tab:not(:disabled):hover, .toptab:not(:disabled):hover { color: var(--accent2); border-color: var(--accent2); box-shadow: 0 0 10px rgba(255, 63, 209, .35); transform: translateY(-1px); }
+  .btn:not(:disabled):active, .big:not(:disabled):active, .tab:active, .toptab:active { transform: translateY(1px) scale(.98); box-shadow: 0 0 4px rgba(54,224,255, .4) inset; transition-duration: .05s; }
+  .btn:focus-visible, .big:focus-visible, .tab:focus-visible, .toptab:focus-visible { outline: 1px solid var(--accent2); outline-offset: 2px; }
+  .btn:disabled, .big:disabled { opacity: .45; cursor: not-allowed; }
+  .btn .ic, .big .ic { transition: transform .2s ease; } .btn:hover .ic, .big:hover .ic { transform: scale(1.15) rotate(-6deg); }
+  table.titles tr:hover td { background: rgba(54,224,255, .04); }
+  .chip { transition: box-shadow .2s ease; } .chip:hover { box-shadow: 0 0 10px rgba(54,224,255, .3); }
+
+  /* ---- the ComfyUI canvas ---- */
+  #comfy-canvas { position:relative; height:620px; overflow:auto; background: radial-gradient(circle at 1px 1px, #1c1e2a 1px, transparent 1.5px) 0 0/22px 22px, #0a0b12; border:1px solid var(--line); }
+  #comfy-links { position:absolute; left:0; top:0; width:1560px; height:600px; pointer-events:none; }
+  #comfy-nodes { position:relative; width:1560px; height:600px; }
+  .cnode { position:absolute; width:230px; background:#15161f; border:1px solid var(--line-soft); box-shadow:0 8px 24px rgba(0,0,0,.5); font-size:11px; }
+  .cnode .chead { padding:5px 8px; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#0b0c14; display:flex; justify-content:space-between; }
+  .cnode .cbody { padding:6px 8px; }
+  .cnode .cin { display:flex; align-items:center; gap:6px; margin:3px 0; }
+  .cnode .cin .dot { width:8px; height:8px; border-radius:50%; background:var(--accent2); flex:none; }
+  .cnode .cin .k { color:var(--faint); min-width:90px; }
+  .cnode .cin input, .cnode .cin select { flex:1; min-width:0; font-size:11px; padding:2px 5px; }
+  .cnode .cin textarea { flex:1; min-width:0; font-size:11px; padding:3px 5px; height:46px; resize:vertical; background:#0b0c14; color:var(--text); border:1px solid var(--line); font-family:inherit; }
+  .cnode .cin .lnk { color:var(--accent); font-size:10px; }
+  .cnode.model .chead { background:#36e0ff; } .cnode.cond .chead { background:#ffd23f; } .cnode.image .chead { background:#5dff9f; } .cnode.proc .chead { background:#ff3fd1; } .cnode.save .chead { background:#b0b5c2; }
+
+  /* ---- scrollbars on theme (the ComfyUI canvas, the logs, every scrolling cell) ---- */
+  * { scrollbar-width: thin; scrollbar-color: #36e0ff #0b0c14; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #0b0c14; border: 1px solid var(--line); }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #36e0ff, #1b8fa6); border: 2px solid #0b0c14; }
+  ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #9bf2ff, #36e0ff); box-shadow: 0 0 8px rgba(54,224,255,.6) inset; }
+  ::-webkit-scrollbar-corner { background: #0b0c14; }
+  #comfy-canvas::-webkit-scrollbar-thumb { background: linear-gradient(90deg, #ff3fd1, #36e0ff); }
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+<symbol id="i-board" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 8v8M12 8v5M16 8v10"/></symbol>
+<symbol id="i-film" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 8h4M3 16h4M17 8h4M17 16h4M3 12h18"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1"/></symbol>
+<symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h2l2-7 3 14 3-10 2 6 2-3h4"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-7 7-3-3-3 3"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2zM19 15l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM5 15l.8 1.6 1.6.8-1.6.8L5 20l-.8-1.6-1.6-.8 1.6-.8z"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+<symbol id="i-skull" viewBox="0 0 24 24"><path d="M12 3a8 8 0 0 0-8 8c0 3 2 5 3 6v4h10v-4c1-1 3-3 3-6a8 8 0 0 0-8-8z"/><circle cx="9" cy="11" r="1.5"/><circle cx="15" cy="11" r="1.5"/><path d="M10 18v3M14 18v3"/></symbol>
+<symbol id="i-log" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5"/></symbol>
+<symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v11H3z"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+</svg>
+<header>
+  <h1>RUVI STUDIO<span class="cursor">_</span></h1>
+  <div class="chips"><span class="chip" id="c-base">base</span><span class="chip" id="c-ffmpeg">ffmpeg</span><span class="chip" id="c-chrome">chrome</span><span class="chip" id="c-pup">renderer</span><span class="chip" id="c-enc">encoder</span><span class="chip" id="c-whisper">whisper</span></div>
+  <div class="actions">
+    <button class="btn" id="mute-btn" title="button and completion sounds on / off">🔊</button>
+    <button class="btn" id="tour-btn" title="a quick tour of every cell and button"><svg class="ic"><use href="#i-compass"/></svg> tour</button>
+    <button class="btn" id="logs-btn" title="the app's log (grab, fetches, renders)"><svg class="ic"><use href="#i-log"/></svg> logs</button>
+    <button class="btn" id="stop-btn" title="finish the section being rendered, then stop"><svg class="ic"><use href="#i-stop"/></svg> stop after section</button>
+    <button class="btn danger" id="kill-btn" title="abort immediately and drop the queue"><svg class="ic"><use href="#i-skull"/></svg> kill now</button>
+    <button class="big" id="render-all"><svg class="ic"><use href="#i-play"/></svg> run all to-do</button>
+  </div>
+</header>
+<main>
+  <div class="banner" id="banner"><div id="banner-text"></div><div class="pbar"><i id="banner-bar" style="width:0"></i></div></div>
+  <div class="card" id="logs-card" style="display:none"><div class="label">Logs <span id="logs-file" style="color:var(--faint);text-transform:none;letter-spacing:0"></span> <button class="btn" id="logs-refresh">refresh</button> <button class="btn" id="logs-close">close</button></div><div class="log" id="logs-body" style="max-height:320px"></div></div>
+  <div class="toptabs" id="toptabs"><button class="toptab on" data-pane="studio"><svg class="ic"><use href="#i-film"/></svg> STUDIO</button><button class="toptab" data-pane="upscaler"><svg class="ic"><use href="#i-spark"/></svg> UPSCALER <b id="up-badge"></b></button></div>
+  <div id="pane-studio">
+    <div class="pathline" id="dest"></div>
+    <div class="grid">
+      <section class="cell span7" id="cell-grab" data-tour="grab">
+        <div class="label"><svg class="ic"><use href="#i-board"/></svg> Trello grab <span class="sub" id="grab-sum"></span></div>
+        <div class="tools"><button class="btn acc" id="g-scan">scan the board</button><button class="btn" id="g-sel" disabled>grab selected</button><button class="btn" id="g-all" disabled>grab all new / partial</button><button class="btn" id="g-tree" title="create or heal the whole tree under the base: _SECRETS, _RUVI PROJECT FILES (suffix file), every channel's Titles + Music, every title's folders; moves old flat titles into Titles">heal tree</button><button class="btn" id="g-music" title="measure every sound in each channel's SFX folder (duration, loudness, tags) — the catalogue the writing room sees">index SFX</button><button class="btn" id="g-refresh" title="rebuild every grabbed title's packet.zip with the channel's current music index/profiles and CTA metadata">refresh SFX &amp; CTA</button><span class="note" id="g-note" style="color:var(--faint)"></span></div>
+        <div id="grab-list"><div class="empty">scan the board to list the cards under each channel marker</div></div>
+      </section>
+      <section class="cell span5" id="cell-jobs" data-tour="jobs">
+        <div class="label"><svg class="ic"><use href="#i-film"/></svg> Rendering <span class="sub" id="jobs-sum"></span></div>
+        <div id="jobs"><div class="empty">nothing running</div></div>
+      </section>
+      <section class="cell span12" id="cell-titles" data-tour="titles">
+        <div class="label"><svg class="ic"><use href="#i-list"/></svg> Titles <span class="sub" id="tsum"></span></div>
+        <div class="tools">
+      <button class="tab on" data-f="todo">to do <b id="n-todo"></b></button><button class="tab" data-f="rendered">done <b id="n-rendered"></b></button><button class="tab" data-f="notready">not ready <b id="n-notready"></b></button><button class="tab" data-f="archived">archived <b id="n-archived"></b></button><button class="tab" data-f="all">all <b id="n-all"></b></button>
+      <input type="search" id="q" placeholder="search title / channel…" /><button class="btn" id="refresh">refresh</button><span id="scan-note" style="color:var(--faint)"></span>
+    </div>
+        <div id="titles"><div class="empty">scanning the base folder…</div></div>
+      </section>
+      <section class="cell span3 cfgcell" id="cell-video" data-tour="video"><div class="label"><svg class="ic"><use href="#i-film"/></svg> Final video</div><label>final video <select id="cfg-fps"><option value="30">1080p · 30 fps</option><option value="60">1080p · 60 fps</option></select></label><label>letterbox <select id="cfg-lb"><option value="0">none</option><option value="1.85">1.85:1 (minimal, 20 px bars)</option><option value="2">2.00:1 (60 px bars)</option><option value="2.2">2.20:1 (103 px bars)</option><option value="2.39">2.39:1 (138 px bars)</option></select></label><label><span><input type="checkbox" id="cfg-keepparts" /> keep Output\parts\ after the final video (faster re-runs)</span></label><label>Sections without a bundle object <select id="cfg-missing"><option value="defaults">animate with defaults</option><option value="skip">skip (title not ready)</option></select></label></section>
+      <section class="cell span3 cfgcell" id="cell-render" data-tour="render"><div class="label"><svg class="ic"><use href="#i-cog"/></svg> Render engine</div><label>workers (0 = auto) <input type="text" id="cfg-workers" size="4" /></label><label>encoder <select id="cfg-enc"><option value="auto">auto (NVENC when available)</option><option value="nvenc">NVENC (GPU)</option><option value="x264">x264 (CPU)</option></select></label><label>NVENC quality (cq, lower = better) <input type="text" id="cfg-cq" size="4" /></label><label>frames <select id="cfg-frames"><option value="jpeg">jpeg 96 (fast, same sharpness)</option><option value="png">png (lossless, ~3× slower)</option></select></label><label>CRF <input type="text" id="cfg-crf" size="4" /></label><label>preset <select id="cfg-preset"><option>ultrafast</option><option>veryfast</option><option>fast</option><option>medium</option><option>slow</option></select></label><label>fade (s) <input type="text" id="cfg-fade" size="5" /></label><label>table lean (°) <input type="text" id="cfg-lean" size="4" /></label><label>highlight <select id="cfg-hl"><option value="ink">ink outline (drawn on)</option><option value="glow">gold glow ring</option></select></label><label>macro lens (maps) <select id="cfg-macro"><option value="off">off</option><option value="light">light</option><option value="normal">normal</option><option value="strong">strong</option></select></label></section>
+      <section class="cell span3 cfgcell" id="cell-audio" data-tour="audio"><div class="label"><svg class="ic"><use href="#i-wave"/></svg> Voice &amp; ambience</div><label>ambience under the voice (dB; 18 = faint, 14 = present, 24 = barely there) <input type="text" id="cfg-under" size="4" /></label><label>ambience ceiling (LUFS, never louder than this) <input type="text" id="cfg-mdb" size="4" /></label><label><span><input type="checkbox" id="cfg-audio" /> narration audio in each section</span></label></section>
+      <section class="cell span3 cfgcell" id="cell-grabcfg" data-tour="whisper"><div class="label"><svg class="ic"><use href="#i-mic"/></svg> Grab &amp; whisper</div><label>Whisper model (blank = auto) <input type="text" id="cfg-wmodel" size="14" placeholder="distil-large-v3" /></label><label>Whisper device <select id="cfg-wdevice"><option value="">auto</option><option value="cuda">cuda</option><option value="cpu">cpu</option></select></label><label>CUDA speed <select id="cfg-wcompute"><option value="float16">float16 (accurate)</option><option value="int8_float16">int8_float16 (fastest)</option></select></label><label>batch size <input type="text" id="cfg-wbatch" size="4" /></label><label>Writing-room chat URL (opened after a grab) <input type="text" id="cfg-chat" /></label><label><span><input type="checkbox" id="cfg-wbatched" /> batched inference</span></label><label><span><input type="checkbox" id="cfg-wauto" /> install whisper + CUDA at startup</span></label></section>
+      <section class="cell span12 cfgcell" id="cell-paths" data-tour="paths"><div class="label"><svg class="ic"><use href="#i-folder"/></svg> Paths &amp; contact</div><div class="inline"><label>Base folder <input type="text" id="cfg-base" /></label><label>Chrome / Edge (blank = auto) <input type="text" id="cfg-chrome" /></label><label>Wikimedia contact (e-mail / URL) <input type="text" id="cfg-contact" /></label></div><div class="inline" style="margin-top:8px"><button class="btn acc" id="save-cfg">save</button> <button class="btn" id="provision">install prerequisites</button> <button class="btn" id="provision-whisper">install whisper + CUDA</button> <span id="cfg-note" style="color:var(--faint)"></span></div></section>
+    </div>
+  </div>
+  <div id="pane-upscaler" style="display:none">
+    <div class="pathline">🎨 Ruvi's Batch Oil Upscaler · ComfyUI on RunPod serverless behind your Vercel functions · one job per image, polled, written back as &lt;n&gt;_painted beside the originals (originals kept in AI Images\_raw\)</div>
+    <div class="grid">
+      <section class="cell span5 cfgcell" id="cell-up-cfg" data-tour="upcfg"><div class="label"><svg class="ic"><use href="#i-spark"/></svg> Upscaler</div><div class="cfg-grid">
+        <label>Vercel URL <input type="text" id="up-url" placeholder="https://comfy-oil-upscaler.vercel.app" /></label>
+        <label>positive prompt (optional, placed before the workflow prompt) <input type="text" id="up-prompt" placeholder="e.g. warm morning light, soft brush strokes" /></label>
+        <label>images at a time <input type="text" id="up-par" size="4" /></label>
+        <label><span><input type="checkbox" id="up-keep" /> keep the originals in AI Images\_raw\</span></label>
+        <div style="flex-basis:100%"><div class="label" style="margin:4px 0 4px 0">channels that get painted</div><div id="up-channels" class="inline"></div></div>
+        <button class="btn" id="up-save">save</button> <span id="up-note" style="color:var(--faint)"></span>
+      </div></section>
+      <section class="cell span7" id="cell-up-titles" data-tour="uptitles"><div class="label"><svg class="ic"><use href="#i-image"/></svg> AI images per title <span class="sub" id="up-sum"></span></div><table class="titles" id="up-titles"></table></section>
+      <section class="cell span12" id="cell-up-web" data-tour="upweb"><div class="label"><svg class="ic"><use href="#i-globe"/></svg> The web UI <span class="inline"><button class="btn" id="up-open">open in a window</button> <button class="btn" id="up-embed">show here</button></span></div><div id="up-frame-wrap" style="display:none;border:1px solid var(--line);overflow:hidden;background:#0d0a07"><iframe id="up-frame" style="width:100%;height:760px;border:0;display:block" title="Ruvi's Batch Oil Upscaler"></iframe></div><div class="hint">The table does the same work without the browser: pick a title, press upscale, and the painted files land in its AI Images folder. The web UI stays here for one-off batches.</div></section>
+      <section class="cell span12" id="cell-up-comfy" data-tour="upcomfy"><div class="label"><svg class="ic"><use href="#i-cog"/></svg> ComfyUI workflow <span class="sub" id="comfy-note"></span><span class="inline"><button class="btn" id="comfy-save">save parameters</button><button class="btn" id="comfy-reset">reset to bundled</button></span></div>
+        <div id="comfy-canvas"><svg id="comfy-links"></svg><div id="comfy-nodes"></div></div>
+        <div class="hint">The same nodes the worker runs, laid out like the ComfyUI canvas. Edit a value and save: every later upscale sends this workflow. The image name (node 5), your prompt prefix (node 6) and a fresh seed (node 8) are filled in per image.</div>
+      </section>
+    </div>
+  </div>
+</main>
+<div id="pixbar" class="idle"><div class="pix-track"><div class="pix-fill" id="pix-fill"></div><div class="pix-head" id="pix-head"></div></div><div class="pix-label" id="pix-label">idle · nothing processing</div></div>
+<svg id="tour-mask" style="display:none" xmlns="http://www.w3.org/2000/svg"><path id="tour-hole" fill="rgba(3,4,10,.82)" fill-rule="evenodd" d=""/><rect id="tour-neon" fill="none" stroke="var(--accent2)" stroke-width="2" rx="4"/></svg>
+<div id="tour" style="display:none"><div class="tour-card" id="tour-card"><div class="tour-step" id="tour-step"></div><div class="tour-title" id="tour-title"></div><div class="tour-text" id="tour-text"></div><div class="tour-dots" id="tour-dots"></div><div class="tour-nav"><button class="btn" id="tour-skip">skip</button><span style="flex:1"></span><button class="btn" id="tour-back">back</button><button class="btn acc" id="tour-next">next</button></div></div></div>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); }, state = null, titles = [], filter = "todo", q = "", openT = {}, openJ = {}, lastJobsKey = "", output = null, gsel = {}, scanKey = "";
+  function api(p, b) { return fetch(p, b !== undefined ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) } : { method: /^\/api\/(state|titles|log)/.test(p) ? "GET" : "POST" }).then(function (r) { return r.json(); }); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function chip(id, cls, text) { var e = $(id); e.textContent = text; e.className = "chip " + cls; }
+  function shortWhy(t) {
+    var w = [];
+    (t.missing || []).forEach(function (m) {
+      if (/downloaded automatically/.test(m)) return;
+      if (/^AI images:/.test(m)) { w.push(m.replace(/ — generate.*$/, "")); return; }
+      if (/^no bundle object/.test(m)) { var n = (m.match(/for (.+?) \(/) || [0, ""])[1].split(", ").length; w.push("bundle: " + n + " section(s) without objects"); return; }
+      if (/not unpacked/.test(m)) { w.push("package not unpacked"); return; }
+      if (/no .*allanimations/.test(m)) { w.push("no bundle in Maps\\"); return; }
+      if (/no VO/.test(m)) { w.push("no VO mp3"); return; }
+      if (/not stamped/.test(m)) { w.push("timecodes pending"); return; }
+      if (/no package/.test(m)) { w.push("no package"); return; }
+      w.push(m.length > 60 ? m.slice(0, 57) + "…" : m);
+    });
+    return w.join(" · ");
+  }
+  function stateOf(t) { var job = (state && state.jobs || []).filter(function (j) { return j.titleFolder === t.titleFolder && !j.download && (j.state === "running" || j.state === "queued"); })[0]; if (job) return job.state; if (!t.ready) return "notready"; if (t.total && t.rendered === t.total) return "rendered"; return t.rendered ? "partial" : "ready"; }
+  function bucket(t) { if (t.archived) return "archived"; var s = stateOf(t); if (s === "running" || s === "queued" || s === "ready" || s === "partial") return "todo"; return s; }
+  function renderTitles() {
+    var el = $("titles"), byCh = {}, counts = { all: 0, todo: 0, rendered: 0, notready: 0, archived: 0 };
+    titles.forEach(function (t) { counts.all++; counts[bucket(t)] = (counts[bucket(t)] || 0) + 1; });
+    ["all", "todo", "rendered", "notready", "archived"].forEach(function (k) { $("n-" + k).textContent = counts[k] || 0; });
+    if (output) $("dest").textContent = "tree → <base>\\<CHANNEL>\\Titles\\<n. Title>\\{Script · Hook · Maps · Reference images · Characters · AI Images · Output}  ·  ambience ← <CHANNEL>\\SFX\\  ·  final video → Output\\<n. Title>.mp4";
+    var qq = q.trim().toLowerCase();
+    titles.forEach(function (t) { if (filter !== "all" && bucket(t) !== filter) return; if (filter === "all" && t.archived) return; if (qq && (t.title + " " + t.channel + " " + (t.subject || "")).toLowerCase().indexOf(qq) < 0) return; (byCh[t.channel] = byCh[t.channel] || []).push(t); });
+    el.innerHTML = "";
+    Object.keys(byCh).sort().forEach(function (ch) {
+      var list = byCh[ch].sort(function (a, b) { return a.n - b.n; }), hd = document.createElement("div"); hd.className = "chan"; var readyN = list.filter(function (t) { return t.ready; }).length;
+      hd.innerHTML = "[" + esc(ch) + "] <small>" + list.length + " title(s) · " + readyN + " ready</small>"; el.appendChild(hd);
+      var tbl = document.createElement("table"), tb = document.createElement("tbody"); tbl.appendChild(tb); el.appendChild(tbl);
+      list.forEach(function (t) {
+        var s = stateOf(t), tr = document.createElement("tr"); tr.className = (s === "notready" || t.archived) ? "notready" : "";
+        var why = s === "notready" ? shortWhy(t) : (t.defaulted ? t.defaulted + " section(s) animated with defaults (no bundle object)" : "");
+        var imgs = t.images ? (t.images.have + "/" + t.images.need) : "–", ai = t.ai ? (t.ai.have + "/" + t.ai.need) : "–";
+        tr.innerHTML = '<td class="n">' + t.n + '</td><td class="t"><span class="name" title="' + esc(t.title) + '">' + esc(t.title) + '</span>' + (why ? '<span class="why" title="' + esc((t.missing || []).join(" | ")) + '">' + esc(why) + '</span>' : "") + '</td>'
+          + '<td class="c">img <b>' + imgs + '</b> · AI <b style="color:' + (t.ai && t.ai.need && t.ai.have === t.ai.need ? "var(--good)" : "inherit") + '">' + ai + '</b> · sfx <b style="color:' + (t.sfx && t.sfx.cues ? (t.sfx.have === t.sfx.cues ? "var(--good)" : "var(--warn)") : "inherit") + '" title="' + (t.sfx && t.sfx.missing && t.sfx.missing.length ? esc("to fetch: " + t.sfx.missing.join(", ")) : "ambience sounds in the channel's SFX folder for this title's cues") + '">' + (t.sfx && t.sfx.cues ? (t.sfx.have + "/" + t.sfx.cues) : "–") + '</b> · parts <b>' + (t.total != null ? (t.rendered + "/" + t.total) : "–") + '</b>' + (t.ctas ? ' · CTA ×' + t.ctas : "") + (t.final ? ' · <b style="color:var(--good)">final ✓</b>' : "") + '</td>'
+          + '<td class="s"><span class="st ' + s + '">' + (s === "notready" ? "not ready" : s) + '</span></td>'
+          + '<td class="a">' + (t.ready ? '<button class="btn acc" data-a="render"' + (s === "running" || s === "queued" ? " disabled" : "") + '>' + (t.rendered ? (t.rendered === t.total ? "re-run" : "run rest") : "run") + '</button> ' : (t.packageZip && !t.subject ? '<button class="btn" data-a="unpack">unpack</button> ' : ""))
+          + (t.subject ? '<button class="btn" data-a="download" title="fetch the section images now">img</button> <button class="btn" data-a="prompts" title="open the AI prompts file (one prompt per line, for TurboFlow-style bulk tools)">prompts</button> <button class="btn" data-a="sfx" title="fetch this title\'s ambience sounds into the channel\'s SFX folder now (the run does it anyway)">sfx</button>' + (t.upscale && t.upscale.raw && t.upscale.enabled !== false ? ' <button class="btn" data-a="up" title="send the ' + t.upscale.raw + ' raw AI image(s) to the oil upscaler (UPSCALER tab)">upscale</button>' : '') + ' <button class="btn" data-a="aiimport" title="copy a bulk tool\'s downloaded images into AI Images\\ as 001, 002 …">AI import</button> ' : "") + '<button class="btn" data-a="archive" title="' + (t.archived ? "bring it back to the lists" : "set this title aside: it leaves to-do and run all never picks it") + '">' + (t.archived ? "unarchive" : "archive") + '</button> ' + (t.total && t.rendered === t.total ? '<button class="btn" data-a="rerender" title="re-render every section part from scratch (hours) — RE-RUN alone reuses them and only redoes the ambience + final">re-render all</button> ' : "") + '<button class="btn" data-a="more">' + (openT[t.titleFolder] ? "less" : "more") + '</button></td>';
+        tr.addEventListener("click", function (e) { var a = e.target.getAttribute("data-a"); if (!a) return;
+          if (a === "render") api("/api/render", { titleFolder: t.titleFolder, force: false }).then(refresh);   // parts are reused; only what changed (new images, the ambience bed, the final pass) is redone
+          if (a === "rerender") { if (confirm("Re-render EVERY section part of this title from scratch? (hours) — the normal RE-RUN already reuses the parts and only redoes the ambience and the final video.")) api("/api/render", { titleFolder: t.titleFolder, force: true }).then(refresh); }
+          if (a === "unpack") api("/api/unpack", { titleFolder: t.titleFolder }).then(function (r) { $("scan-note").textContent = r.ok ? (r.files + " file(s) unpacked") : (r.error || "unpack failed"); loadTitles(); });
+          if (a === "download") api("/api/download", { titleFolder: t.titleFolder }).then(refresh);
+          if (a === "archive") api("/api/archive", { titleFolder: t.titleFolder, on: !t.archived }).then(loadTitles);
+          if (a === "prompts") api("/api/open", { path: t.promptsPath || (t.titleFolder + "\\Script") });
+          if (a === "up") api("/api/upscale", { titleFolder: t.titleFolder }).then(function (r) { $("scan-note").textContent = r.ok ? "upscale queued — progress in the Rendering card" : (r.skip || "failed"); refresh(); });
+          if (a === "sfx") api("/api/sfx/fetch", { titleFolder: t.titleFolder }).then(function (r) { $("scan-note").textContent = r.ok ? "ambience fetch queued — it runs after whatever is running (progress in the bar and the Rendering card)" : (r.error || r.skip || "failed"); refresh(); });
+          if (a === "aiimport") { var from = prompt("Folder with the generated images (taken in name order → AI Images\\001, 002 …):", ""); if (from) api("/api/ai/import", { titleFolder: t.titleFolder, from: from }).then(function (r) { $("scan-note").textContent = r.ok ? (r.imported + " image(s) → " + r.into) : (r.error || "import failed"); loadTitles(); }); }
+          if (a === "more") { openT[t.titleFolder] = !openT[t.titleFolder]; renderTitles(); } });
+        tb.appendChild(tr);
+        if (openT[t.titleFolder]) {
+          var d = document.createElement("tr"); d.className = "detail";
+          d.innerHTML = '<td colspan="5">' + (t.subject ? "subject <b>" + esc(t.subject) + "</b> · " : "") + "final: " + esc(t.finalPath || (t.titleFolder + "\\Output\\")) + (t.sfx ? " · ambience: " + t.sfx.cues + " cue(s), " + t.sfx.files + " sound(s) cached" : "") + (t.missing && t.missing.length ? "<br>" + esc(t.missing.join(" · ")) : "") + '<div class="secs">' + (t.sections || []).map(function (x) { return '<span class="' + (x.done ? "done" : (x.defaulted ? "def" : "")) + '" title="' + esc(x.type + " · " + x.sec + "s" + (x.defaulted ? " · default animation" : "")) + '">' + esc(x.name) + (x.done ? " ✓" : "") + "</span>"; }).join("") + '</div><button class="btn" data-a="open">open folder</button> ' + (t.rendered ? '<button class="btn" data-a="openout">open output</button>' : "") + '</td>';
+          d.addEventListener("click", function (e) { var a = e.target.getAttribute("data-a"); if (a === "open") api("/api/open", { path: t.titleFolder }); if (a === "openout") api("/api/open", { path: t.outBase }); });
+          tb.appendChild(d);
+        }
+      });
+    });
+    $("tsum").textContent = "· " + titles.length + " title(s) · " + (counts.todo || 0) + " to do · " + (counts.rendered || 0) + " done" + (counts.archived ? " · " + counts.archived + " archived" : "") + (state && state.health && state.health.channels ? "  ·  channels: " + state.health.channels.map(function (c) { return c.name + " (" + c.titles + " titles, " + c.sfx + " sounds)"; }).join(", ") : "");
+    $("render-all").disabled = !titles.some(function (t) { return t.ready && !t.finished && !t.archived && t.rendered < t.total; });
+    if (!Object.keys(byCh).length) el.innerHTML = '<div class="empty">' + (titles.length ? "nothing matches" : "no titles under the base folder") + '</div>';
+  }
+  function renderJobs() {
+    var el = $("jobs"), jobs = (state && state.jobs) || []; el.innerHTML = jobs.length ? "" : '<div class="empty">nothing running</div>';
+    var tbl = document.createElement("table"), tb = document.createElement("tbody"); tbl.appendChild(tb); if (jobs.length) el.appendChild(tbl);
+    jobs.slice().reverse().forEach(function (j) {
+      var tr = document.createElement("tr"), pct = j.total ? Math.round(j.done / j.total * 100) : 0;
+      tr.innerHTML = '<td class="t"><span class="name">' + esc(j.title) + '</span><span class="why">' + esc(j.error || j.detail || "") + '</span>' + (j.total ? '<div class="prog"><i style="width:' + pct + '%"></i></div>' : "") + '</td><td class="c">' + (j.total ? ("<b>" + j.done + "/" + j.total + "</b>") : "") + '</td><td class="s"><span class="st ' + esc(j.state) + '">' + esc(j.state) + '</span></td><td class="a"><button class="btn" data-a="log">' + (openJ[j.id] ? "hide" : "log") + '</button> ' + (j.state !== "running" ? '<button class="btn" data-a="remove">×</button>' : "") + '</td>';
+      tr.addEventListener("click", function (e) { var a = e.target.getAttribute("data-a"); if (!a) return; if (a === "log") { openJ[j.id] = !openJ[j.id]; renderJobs(); if (openJ[j.id]) api("/api/log/" + j.id).then(function (r) { var l = document.getElementById("log-" + j.id); if (l) l.textContent = (r.log || []).join("\n"); }); } if (a === "remove") api("/api/remove", { id: j.id }).then(refresh); });
+      tb.appendChild(tr);
+      if (openJ[j.id]) { var d = document.createElement("tr"); d.className = "detail"; d.innerHTML = '<td colspan="4"><div class="log" id="log-' + j.id + '">' + esc((j.log || []).join("\n")) + '</div></td>'; tb.appendChild(d); }
+    });
+    $("jobs-sum").textContent = jobs.length ? ("· " + jobs.filter(function (j) { return j.state === "done"; }).length + " done · " + jobs.filter(function (j) { return j.state === "queued"; }).length + " queued") : "";
+  }
+  function renderHealth() {
+    var h = state.health || {}, pv = h.provision || {};
+    chip("c-base", h.base ? "ok" : "bad", "base " + (h.base ? "ok" : "missing"));
+    chip("c-ffmpeg", h.ffmpeg ? "ok" : (pv.running && pv.step === "ffmpeg" ? "busy" : "bad"), h.ffmpeg ? "ffmpeg ok" : (pv.running && pv.step === "ffmpeg" ? "ffmpeg installing" : "ffmpeg missing"));
+    chip("c-chrome", h.chrome ? "ok" : (pv.running && pv.step === "browser" ? "busy" : "bad"), h.chrome ? "chrome ok" : (pv.running && pv.step === "browser" ? "chrome installing" : "chrome missing"));
+    chip("c-pup", h.puppeteer ? "ok" : (pv.running && pv.step === "renderer" ? "busy" : "bad"), h.puppeteer ? "renderer ok" : (pv.running && pv.step === "renderer" ? "renderer installing" : "renderer missing"));
+    chip("c-whisper", h.whisper ? "ok" : (pv.running && /uv|python|whisper|model/.test(pv.step) ? "busy" : "bad"), h.whisper ? ("whisper · " + h.whisper.slice(0, 40)) : (pv.running && /uv|python|whisper|model/.test(pv.step) ? "whisper installing" : "whisper missing")); $("c-whisper").title = h.whisper || "";
+    var enc = h.encoder || "checking"; chip("c-enc", /nvenc/.test(enc) ? "ok" : (enc === "checking" ? "busy" : "bad"), /nvenc/.test(enc) ? ("GPU encode · " + enc.replace(/^h264_nvenc · /, "")) : (enc === "checking" ? "encoder…" : "CPU encode (x264)")); $("c-enc").title = enc;
+    var b = $("banner");
+    if (pv.running) { b.style.display = ""; b.className = "banner"; $("banner-text").textContent = "installing prerequisites — " + pv.step + ": " + (pv.msg || "") + (pv.pct ? " · " + pv.pct + "%" : ""); $("banner-bar").style.width = (pv.pct || 0) + "%"; }
+    else if (pv.error) { b.style.display = ""; b.className = "banner bad"; $("banner-text").textContent = "prerequisites: " + pv.error + " — fix and press “install prerequisites” in Settings"; $("banner-bar").style.width = "0"; }
+    else if (pv.running && /uv|python|whisper|model/.test(pv.step)) { b.style.display = ""; b.className = "banner"; $("banner-text").textContent = "installing whisper runtime — " + pv.step + ": " + (pv.msg || ""); $("banner-bar").style.width = (pv.pct || 0) + "%"; }
+    else if (h.tree && h.tree.warnings && h.tree.warnings.length) { b.style.display = ""; b.className = "banner"; $("banner-text").textContent = "tree: " + h.tree.warnings.join("  ·  "); $("banner-bar").style.width = "0"; }
+    else if (h.freesound === false) { b.style.display = ""; b.className = "banner"; $("banner-text").textContent = "no Freesound API key in _SECRETS\\secrets.json (\"freesoundKey\") — ambience the writing room asks for can only come from sounds already in <CHANNEL>\\SFX\\ or the small bundled Commons set. A key is free: freesound.org → API."; $("banner-bar").style.width = "0"; }
+    else if (h.contact === false) { b.style.display = ""; b.className = "banner"; $("banner-text").textContent = "Wikimedia contact is empty — without it Wikimedia caps this machine at 10 downloads per minute (rate-limit 429s). Settings → Wikimedia contact: your e-mail or a URL."; $("banner-bar").style.width = "0"; }
+    else if (!h.ffmpeg || !h.chrome || !h.puppeteer) { b.style.display = ""; b.className = "banner"; $("banner-text").textContent = "missing: " + [!h.ffmpeg ? "ffmpeg" : "", !h.chrome ? "chrome" : "", !h.puppeteer ? "renderer package" : ""].filter(Boolean).join(", ") + " — press “install prerequisites” in Settings"; $("banner-bar").style.width = "0"; }
+    else b.style.display = "none";
+  }
+  function renderScan() {
+    var r = state && state.scan, el = $("grab-list"); if (!r) return; var key = r.scannedAt + "|" + (state.jobs || []).map(function (j) { return j.grab ? j.id + j.state : ""; }).join(","); if (key === scanKey) return; scanKey = key; el.innerHTML = "";
+    if (!r.ok) { el.innerHTML = '<div class="empty">' + esc(r.error) + '</div>'; return; }
+    var byCh = {}; (r.candidates || []).forEach(function (c) { (byCh[c.channel] = byCh[c.channel] || []).push(c); });
+    Object.keys(byCh).sort().forEach(function (ch) {
+      var hd = document.createElement("div"); hd.className = "chan"; hd.innerHTML = "[" + esc(ch) + "] <small>" + byCh[ch].length + " card(s)</small>"; el.appendChild(hd);
+      var tbl = document.createElement("table"), tb = document.createElement("tbody"); tbl.appendChild(tb); el.appendChild(tbl);
+      byCh[ch].forEach(function (c) {
+        var job = (state.jobs || []).filter(function (j) { return j.grab && j.cardId === c.cardId; }).slice(-1)[0]; var st = job && (job.state === "queued" || job.state === "running") ? job.state : c.state;
+        var flags = c.health ? ["docx", "mp3", "srt", "cover"].map(function (k) { return '<span style="color:' + (c.health[k] ? "var(--good)" : "var(--faint)") + '">' + k + "</span>"; }).join(" ") : "";
+        var tr = document.createElement("tr"); tr.className = c.state === "ok" ? "notready" : "";
+        tr.innerHTML = '<td class="n"><input type="checkbox" data-id="' + esc(c.cardId) + '"' + (gsel[c.cardId] ? " checked" : "") + (c.state === "ok" ? "" : "") + ' /></td><td class="t"><span class="name" title="' + esc(c.title) + '">' + esc((c.number ? c.number + ". " : "") + c.title) + '</span><span class="why">' + (c.existingFolder ? esc(c.existingFolder) + " · " : "") + flags + '</span></td><td class="c"></td><td class="s"><span class="st ' + esc(st === "ok" ? "rendered" : (st === "new" ? "ready" : st)) + '">' + esc(st) + '</span></td><td class="a">' + (job && job.state !== "queued" && job.state !== "running" ? '<button class="btn" data-a="glog" data-j="' + job.id + '">log</button> ' : "") + (c.state !== "ok" || true ? '<button class="btn acc" data-a="grab"' + (st === "queued" || st === "running" ? " disabled" : "") + '>grab</button>' : "") + '</td>';
+        tr.querySelector("input").addEventListener("change", function () { gsel[c.cardId] = this.checked; $("g-sel").disabled = !Object.keys(gsel).some(function (k) { return gsel[k]; }); });
+        tr.addEventListener("click", function (e) { var a = e.target.getAttribute("data-a"); if (a === "grab") api("/api/grab/run", { cardIds: [c.cardId] }).then(refresh); if (a === "glog") { openJ[e.target.getAttribute("data-j")] = true; renderJobs(); api("/api/log/" + e.target.getAttribute("data-j")).then(function (x) { var l = document.getElementById("log-" + e.target.getAttribute("data-j")); if (l) l.textContent = (x.log || []).join("\n"); }); } });
+        tb.appendChild(tr);
+      });
+    });
+    var cs = r.candidates || []; $("grab-sum").textContent = "· " + cs.length + " card(s) · " + cs.filter(function (c) { return c.state === "new"; }).length + " new · " + cs.filter(function (c) { return c.state === "partial"; }).length + " partial · " + cs.filter(function (c) { return c.state === "ok"; }).length + " ok";
+    $("g-all").disabled = !cs.some(function (c) { return c.state !== "ok"; });
+  }
+  $("g-scan").onclick = function () { $("g-note").textContent = "scanning…"; api("/api/grab/scan", {}).then(function (r) { snd.scan(r && r.ok && (r.candidates || []).length); $("g-note").textContent = r.ok ? "" : (r.error || "scan failed"); refresh(); }); };
+  $("g-sel").onclick = function () { var ids = Object.keys(gsel).filter(function (k) { return gsel[k]; }); api("/api/grab/run", { cardIds: ids }).then(function () { gsel = {}; $("g-sel").disabled = true; refresh(); }); };
+  $("g-all").onclick = function () { if (confirm("Grab every card that is new or partial?")) api("/api/grab/all", {}).then(refresh); };
+  $("g-music").onclick = function () { $("g-note").textContent = "measuring ambience…"; api("/api/sfx/index", {}).then(function (r) { $("g-note").textContent = r.ok ? "queued — measuring every channel's library (progress in the bar)" : (r.skip || "failed"); refresh(); }); };
+    $("g-refresh").onclick = function () { $("g-note").textContent = "queuing…"; api("/api/refresh-packets", {}).then(function (r) { $("g-note").textContent = r.ok ? "packet refresh queued — runs after whatever is running (progress in the bar)" : (r.skip || "failed"); refresh(); }); };
+  $("g-tree").onclick = function () { $("g-note").textContent = "healing…"; api("/api/heal-base", {}).then(function (r) { $("g-note").textContent = r.ok ? r.report.message : "failed"; refresh(); loadTitles(); }); };
+  $("provision-whisper").onclick = function () { api("/api/grab/whisper", {}).then(function () { api("/api/health", {}).then(refresh); }); };
+  function fillCfg() { var c = state.config; $("cfg-base").value = c.base; $("cfg-lb").value = String(c.render.letterbox != null ? c.render.letterbox : 2); $("cfg-mdb").value = c.render.sfxLufs != null ? c.render.sfxLufs : -31; $("cfg-keepparts").checked = c.render.keepParts !== false; $("cfg-missing").value = c.render.missingObjects || "defaults"; $("cfg-fps").value = String(c.render.fps || 60); $("cfg-workers").value = c.render.workers || 0; $("cfg-enc").value = c.render.encoder || "auto"; $("cfg-cq").value = c.render.nvencCq != null ? c.render.nvencCq : 19; $("cfg-frames").value = c.render.frameFormat || "jpeg"; $("cfg-crf").value = c.render.crf; $("cfg-preset").value = c.render.preset; $("cfg-fade").value = c.render.fadeSec; $("cfg-lean").value = c.render.tableLean != null ? c.render.tableLean : 17; $("cfg-hl").value = c.render.hlStyle || "ink"; $("cfg-audio").checked = c.render.audio !== false; $("cfg-macro").value = c.render.macro || "normal"; $("cfg-chrome").value = c.render.chrome || ""; $("cfg-contact").value = c.download.contact || ""; $("cfg-wmodel").value = (c.grab && c.grab.whisperModel) || ""; $("cfg-wdevice").value = (c.grab && c.grab.whisperDevice) || ""; $("cfg-chat").value = (c.grab && c.grab.chatUrl) || ""; $("cfg-wauto").checked = !(c.grab && c.grab.autoInstallWhisper === false); $("cfg-wcompute").value = (c.grab && c.grab.computeType) || "float16"; $("cfg-wbatched").checked = !(c.grab && c.grab.batched === false); $("cfg-wbatch").value = (c.grab && c.grab.batchSize) || 16; }
+  function refresh() { return api("/api/state").then(function (s) { state = s; renderHealth(); renderJobs(); renderScan(); jobSounds(s.jobs); pixbar(s.jobs); var k = (s.jobs || []).map(function (j) { return j.id + j.state + j.done; }).join(","); if (k !== lastJobsKey) { lastJobsKey = k; loadTitles(); } else renderTitles(); }); }
+  document.querySelectorAll(".toptab").forEach(function (b) { b.onclick = function () { document.querySelectorAll(".toptab").forEach(function (x) { x.classList.toggle("on", x === b); }); $("pane-studio").style.display = b.dataset.pane === "studio" ? "" : "none"; $("pane-upscaler").style.display = b.dataset.pane === "upscaler" ? "" : "none"; if (b.dataset.pane === "upscaler") { renderUpscaler(); if (!COMFY) comfyLoad(); } }; });
+  function renderUpscaler() {
+    var c = state && state.config ? state.config : null; if (c && c.upscaler && !$("up-url").dataset.touched) { $("up-url").value = c.upscaler.url || ""; $("up-prompt").value = c.upscaler.prompt || ""; $("up-par").value = c.upscaler.parallel || 4; $("up-keep").checked = c.upscaler.keepRaw !== false; }
+    if (c && !$("up-channels").dataset.built) { var chs = (state.health && state.health.channels ? state.health.channels.map(function (x) { return x.name; }) : []).filter(function (n) { return !/^_/.test(n); }); var on = (c.upscaler && c.upscaler.channels) || {}; $("up-channels").innerHTML = chs.map(function (n) { return '<label style="min-width:auto;margin-right:10px"><span><input type="checkbox" class="up-ch" data-ch="' + esc(n) + '" ' + (on[n] === false ? "" : "checked") + ' /> ' + esc(n) + '</span></label>'; }).join(""); if (chs.length) $("up-channels").dataset.built = "1"; }
+    var el = $("up-titles"); el.innerHTML = ""; var raw = 0, rows = 0;
+    titles.filter(function (t) { return t.upscale && t.upscale.enabled !== false && (t.upscale.raw || t.upscale.painted); }).forEach(function (t) {
+      rows++; raw += t.upscale.raw; var job = (state.jobs || []).filter(function (j) { return j.titleFolder === t.titleFolder && j.upscale && (j.state === "running" || j.state === "queued"); })[0];
+      var tr = document.createElement("tr"); tr.innerHTML = '<td class="n">' + t.n + '</td><td class="t"><span class="name">' + esc(t.title) + '</span><span class="why">' + esc(t.channel) + '</span></td><td class="c">raw <b style="color:' + (t.upscale.raw ? "var(--warn)" : "inherit") + '">' + t.upscale.raw + '</b> · painted <b style="color:' + (t.upscale.painted ? "var(--good)" : "inherit") + '">' + t.upscale.painted + '</b>' + (job ? ' · <b>' + (job.state === "running" ? (job.done + "/" + job.total + " running") : "queued") + '</b>' : "") + '</td><td class="a">' + (t.upscale.raw && !job ? '<button class="btn" data-a="up">upscale ' + t.upscale.raw + '</button>' : "") + '</td>';
+      var bu = tr.querySelector("[data-a=up]"); if (bu) bu.onclick = function () { api("/api/upscale", { titleFolder: t.titleFolder }).then(function (r) { $("up-note").textContent = r.ok ? "queued — progress in the Rendering card and the logs" : (r.skip || "failed"); refresh(); }); };
+      el.appendChild(tr);
+    });
+    $("up-sum").textContent = "· " + rows + " title(s) with AI images · " + raw + " raw image(s) to paint"; $("up-badge").textContent = raw ? String(raw) : "";
+    if (!rows) el.innerHTML = '<tr><td colspan="4" style="color:var(--faint);padding:12px">no title has AI images yet — generate them from the prompts file, then press upscale here</td></tr>';
+  }
+  $("up-url").oninput = $("up-prompt").oninput = $("up-par").oninput = function () { $("up-url").dataset.touched = "1"; };
+  $("up-save").onclick = function () { var chm = {}; document.querySelectorAll(".up-ch").forEach(function (cb) { chm[cb.dataset.ch] = cb.checked; }); api("/api/config", { config: { upscaler: { url: $("up-url").value.trim(), prompt: $("up-prompt").value.trim(), parallel: +$("up-par").value || 4, keepRaw: $("up-keep").checked, channels: chm } } }).then(function () { delete $("up-url").dataset.touched; $("up-note").textContent = "saved"; refresh(); }); };
+  $("up-open").onclick = function () { var u = $("up-url").value.trim(); if (u) window.open(u, "_blank"); else $("up-note").textContent = "set the Vercel URL first"; };
+  $("up-embed").onclick = function () { var u = $("up-url").value.trim(); if (!u) { $("up-note").textContent = "set the Vercel URL first"; return; } var w = $("up-frame-wrap"); w.style.display = w.style.display === "none" ? "" : "none"; if (w.style.display !== "none") $("up-frame").src = u; };
+  function loadTitles() { return api("/api/titles").then(function (r) { titles = r.titles || []; output = r.output || null; renderTitles(); if ($("pane-upscaler").style.display !== "none") renderUpscaler(); else { var raw = 0; titles.forEach(function (t) { if (t.upscale && t.upscale.enabled !== false) raw += t.upscale.raw; }); $("up-badge").textContent = raw ? String(raw) : ""; } }); }
+  function showLogs() { $("logs-card").style.display = ""; api("/api/logs").then(function (r) { $("logs-file").textContent = "· " + (r.file || ""); $("logs-body").textContent = (r.lines || []).join("\n"); $("logs-body").scrollTop = $("logs-body").scrollHeight; }); }
+  $("logs-btn").onclick = showLogs; $("logs-refresh").onclick = showLogs; $("logs-close").onclick = function () { $("logs-card").style.display = "none"; };
+  $("stop-btn").onclick = function () { api("/api/stop", {}).then(refresh); }; $("kill-btn").onclick = function () { if (confirm("Kill the current render now and drop the queue?")) api("/api/kill", {}).then(refresh); };
+  Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (b) { b.addEventListener("click", function () { filter = b.getAttribute("data-f"); Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (x) { x.className = "tab" + (x === b ? " on" : ""); }); renderTitles(); }); });
+  $("q").addEventListener("input", function () { q = this.value; renderTitles(); });
+  $("refresh").onclick = loadTitles; $("render-all").onclick = function () { api("/api/render-all", {}).then(refresh); };
+  $("provision").onclick = function () { api("/api/provision", {}).then(function () { api("/api/health", {}).then(refresh); }); };
+  $("save-cfg").onclick = function () { api("/api/config", { config: { base: $("cfg-base").value, render: { fps: +$("cfg-fps").value || 60, letterbox: +$("cfg-lb").value, sfxLufs: +$("cfg-mdb").value, sfxUnderVoiceDb: +$("cfg-under").value, keepParts: $("cfg-keepparts").checked, workers: +$("cfg-workers").value || 0, frameFormat: $("cfg-frames").value, encoder: $("cfg-enc").value, nvencCq: +$("cfg-cq").value || 19, crf: +$("cfg-crf").value || 18, preset: $("cfg-preset").value, fadeSec: +$("cfg-fade").value || 0.5, tableLean: +$("cfg-lean").value || 17, hlStyle: $("cfg-hl").value, audio: $("cfg-audio").checked, macro: $("cfg-macro").value, edgeBlur: $("cfg-macro").value !== "off", chrome: $("cfg-chrome").value, missingObjects: $("cfg-missing").value }, download: { contact: $("cfg-contact").value }, grab: { whisperModel: $("cfg-wmodel").value, whisperDevice: $("cfg-wdevice").value, chatUrl: $("cfg-chat").value, autoInstallWhisper: $("cfg-wauto").checked, computeType: $("cfg-wcompute").value, batched: $("cfg-wbatched").checked, batchSize: +$("cfg-wbatch").value || 16 } } }).then(function (r) { $("cfg-note").textContent = r.ok ? "saved" : (r.error || "error"); refresh().then(loadTitles); }); };
+  refresh().then(function () { fillCfg(); return loadTitles(); }); setInterval(refresh, 2000); setInterval(function () { api("/api/health", {}); }, 15000);
+
+  /* ---- sounds: synthesized with WebAudio (no files): a soft blip on buttons, a chime when a job finishes, a low buzz on failure ---- */
+  var AC = null, muted = (function () { try { return localStorage.getItem("ruvi_mute") === "1"; } catch (e) { return false; } })();
+  function ac() { if (!AC || AC.state === "closed") { try { AC = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" }); } catch (e) { return Promise.resolve(null); } }
+    if (AC.state !== "running") return AC.resume().then(function () { return AC; }, function () { return AC; });   // the browser suspends the context after idle time or a tab switch: always resume BEFORE scheduling, or the sound is lost
+    return Promise.resolve(AC); }
+  function tone(f, t0, dur, type, gain) { ac().then(function (a) { if (!a) return; var now = a.currentTime; var o = a.createOscillator(), g = a.createGain(); o.type = type || "square"; o.frequency.setValueAtTime(f, now + t0); g.gain.setValueAtTime(0.0001, now + t0); g.gain.exponentialRampToValueAtTime(gain || 0.05, now + t0 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, now + t0 + dur); o.connect(g); g.connect(a.destination); o.start(now + t0); o.stop(now + t0 + dur + 0.02); o.onended = function () { try { o.disconnect(); g.disconnect(); } catch (e) {} }; }); }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && AC && AC.state !== "running") AC.resume(); });
+  setInterval(function () { if (AC && AC.state === "suspended" && !muted) AC.resume(); }, 15000);
+  var snd = { click: function () { if (!muted) tone(880, 0, 0.05, "square", 0.03); }, tab: function () { if (!muted) { tone(660, 0, 0.05, "square", 0.03); tone(990, 0.05, 0.06, "square", 0.03); } },
+              done: function () { if (!muted) { [523, 659, 784, 1047].forEach(function (f, i) { tone(f, i * 0.11, 0.18, "triangle", 0.07); }); tone(1319, 0.46, 0.35, "triangle", 0.06); } },
+              fail: function () { if (!muted) { tone(196, 0, 0.25, "sawtooth", 0.05); tone(147, 0.22, 0.4, "sawtooth", 0.05); } } };
+  /* every interaction has a sound (hover excluded): buttons, tabs, checkboxes, dropdowns, typing, confirmed fields, links, the details toggle, scan results */
+  snd.toggle = function (on) { if (!muted) { tone(on ? 740 : 520, 0, 0.05, "square", 0.03); tone(on ? 1100 : 390, 0.05, 0.07, "square", 0.025); } };
+  snd.select = function () { if (!muted) { tone(600, 0, 0.04, "triangle", 0.04); tone(900, 0.04, 0.06, "triangle", 0.03); } };
+  snd.key = function () { if (!muted) tone(1400 + Math.random() * 300, 0, 0.018, "square", 0.012); };
+  snd.confirm = function () { if (!muted) { tone(784, 0, 0.06, "triangle", 0.04); tone(1175, 0.06, 0.08, "triangle", 0.035); } };
+  snd.open = function () { if (!muted) { tone(440, 0, 0.05, "triangle", 0.035); tone(660, 0.05, 0.08, "triangle", 0.03); } };
+  snd.scan = function (n) { if (!muted) { tone(523, 0, 0.08, "triangle", 0.05); tone(659, 0.09, 0.08, "triangle", 0.05); if (n) tone(880, 0.18, 0.16, "triangle", 0.05); else tone(392, 0.18, 0.2, "sawtooth", 0.035); } };
+  document.addEventListener("click", function (e) { var b = e.target.closest("button"); if (b) { if (b.classList.contains("toptab") || b.classList.contains("tab")) snd.tab(); else if (b.disabled) snd.fail(); else snd.click(); return; } var a = e.target.closest("a"); if (a) snd.open(); });
+  document.addEventListener("change", function (e) { var el = e.target; if (!el) return; if (el.type === "checkbox") snd.toggle(el.checked); else if (el.tagName === "SELECT") snd.select(); else if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") snd.confirm(); });
+  var lastKey = 0; document.addEventListener("input", function (e) { var el = e.target; if (!el || (el.tagName !== "INPUT" && el.tagName !== "TEXTAREA") || el.type === "checkbox") return; var now = Date.now(); if (now - lastKey > 40) { lastKey = now; snd.key(); } });
+  document.addEventListener("toggle", function (e) { if (e.target && e.target.tagName === "DETAILS") snd.toggle(e.target.open); }, true);
+  document.addEventListener("keydown", function (e) { if (e.key === "Enter" && e.target && e.target.tagName === "INPUT") snd.confirm(); });
+  $("mute-btn").textContent = muted ? "🔇" : "🔊"; $("mute-btn").onclick = function () { muted = !muted; try { localStorage.setItem("ruvi_mute", muted ? "1" : "0"); } catch (e) {} $("mute-btn").textContent = muted ? "🔇" : "🔊"; if (!muted) snd.done(); };
+  var jobStates = {};
+  function jobSounds(jobs) { (jobs || []).forEach(function (j) { var prev = jobStates[j.id]; if (prev && prev !== j.state) { if (j.state === "done") snd.done(); else if (j.state === "failed" || j.state === "killed") snd.fail(); } jobStates[j.id] = j.state; }); }
+  /* ---- the pixel bar: the running job's progress, always on screen ---- */
+  function pixbar(jobs) {
+    var el = $("pixbar"), run = (jobs || []).filter(function (j) { return j.state === "running"; })[0], last = (jobs || []).slice(-1)[0];
+    el.className = "";
+    if (run) { var kind = run.grab ? "grabbing" : run.download ? "fetching images" : run.upscale ? "upscaling" : run.task === "sfx" ? "fetching ambience" : run.task === "refresh" ? "refreshing packets" : run.task === "index" ? "measuring sounds" : "rendering", pct = run.total ? Math.round(run.done / run.total * 100) : null; el.classList.add("busy"); if (pct == null) el.classList.add("indet"); $("pix-fill").style.width = (pct == null ? 30 : pct) + "%"; $("pix-head").style.left = "calc(" + (pct == null ? 30 : pct) + "% - 4px)"; $("pix-label").textContent = kind.toUpperCase() + " · " + (run.total ? run.done + "/" + run.total + " · " : "") + (pct != null ? pct + "% · " : "") + (run.title || "") + (run.detail ? " · " + run.detail : ""); }
+    else if (last && (last.state === "done" || last.state === "failed" || last.state === "killed")) { el.classList.add(last.state === "done" ? "done" : "failed"); $("pix-fill").style.width = "100%"; $("pix-label").textContent = (last.state === "done" ? "✓ DONE" : "✗ " + last.state.toUpperCase()) + " · " + (last.title || "") + (last.error ? " · " + last.error : ""); }
+    else { el.classList.add("idle"); $("pix-fill").style.width = "0%"; $("pix-label").textContent = "idle · nothing processing"; }
+  }
+  /* ---- the tour mask: a hole over the cell, a neon frame around it ---- */
+  function tourMask(el) {
+    var m = $("tour-mask"); if (!el) { m.style.display = "none"; return; }
+    var r = el.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight, p = 6, x = r.left - p, y = r.top - p, w = r.width + 2 * p, h = r.height + 2 * p;
+    $("tour-hole").setAttribute("d", "M0 0H" + W + "V" + H + "H0Z M" + x + " " + y + "H" + (x + w) + "V" + (y + h) + "H" + x + "Z");
+    var n = $("tour-neon"); n.setAttribute("x", x); n.setAttribute("y", y); n.setAttribute("width", w); n.setAttribute("height", h); m.style.display = "";
+  }
+  window.addEventListener("resize", function () { if (tourOn) tourMask(document.querySelector(".tour-target")); }); window.addEventListener("scroll", function () { if (tourOn) tourMask(document.querySelector(".tour-target")); }, true);
+
+  /* ---- the ComfyUI canvas: nodes from the workflow, links drawn from input references, parameters editable ---- */
+  var COMFY = null, COMFY_POS = { "1": [20, 20], "2": [20, 200], "3": [300, 20], "4": [20, 330], "5": [20, 460], "6": [580, 20], "7": [580, 230], "8": [880, 20], "9": [1180, 20] }, COMFY_KIND = { "1": "model", "2": "model", "3": "model", "4": "model", "5": "image", "6": "cond", "7": "cond", "8": "proc", "9": "save" };
+  var COMFY_ENUM = { sampler_name: ["dpm_fast", "dpm_adaptive", "euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_sde", "ddim", "uni_pc"], scheduler: ["karras", "normal", "simple", "exponential", "sgm_uniform"], mode_type: ["Linear", "Chess", "None"], seam_fix_mode: ["None", "Band Pass", "Half Tile", "Half Tile + Intersections"] };
+  function comfyLoad() { api("/api/upscaler/workflow").then(function (r) { COMFY = r.workflow; $("comfy-note").textContent = r.custom ? "· custom parameters saved" : "· bundled workflow"; comfyDraw(); }); }
+  function comfyDraw() {
+    var nodes = $("comfy-nodes"), svg = $("comfy-links"); nodes.innerHTML = ""; svg.innerHTML = "";
+    Object.keys(COMFY).forEach(function (id) {
+      var n = COMFY[id], el = document.createElement("div"), pos = COMFY_POS[id] || [20, 20]; el.className = "cnode " + (COMFY_KIND[id] || "proc"); el.style.left = pos[0] + "px"; el.style.top = pos[1] + "px"; el.dataset.id = id;
+      var html = '<div class="chead"><span>' + esc((n._meta && n._meta.title) || n.class_type) + '</span><span>#' + id + '</span></div><div class="cbody">';
+      Object.keys(n.inputs).forEach(function (k) {
+        var v = n.inputs[k];
+        if (Array.isArray(v)) html += '<div class="cin"><span class="dot"></span><span class="k">' + esc(k) + '</span><span class="lnk">← node ' + esc(String(v[0])) + ' : ' + esc(String(v[1])) + '</span></div>';
+        else if (COMFY_ENUM[k]) html += '<div class="cin"><span class="k">' + esc(k) + '</span><select data-k="' + esc(k) + '">' + COMFY_ENUM[k].map(function (o) { return '<option' + (o === v ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("") + '</select></div>';
+        else if (typeof v === "boolean") html += '<div class="cin"><span class="k">' + esc(k) + '</span><input type="checkbox" data-k="' + esc(k) + '"' + (v ? " checked" : "") + ' /></div>';
+        else if (k === "text") html += '<div class="cin"><span class="k">' + esc(k) + '</span><textarea data-k="text">' + esc(String(v)) + '</textarea></div>';
+        else html += '<div class="cin"><span class="k">' + esc(k) + (k === "seed" ? " (random per image)" : (k === "image" ? " (per image)" : "")) + '</span><input type="text" data-k="' + esc(k) + '" value="' + esc(String(v)) + '"' + ((k === "seed" || k === "image") ? " disabled" : "") + ' /></div>';
+      });
+      el.innerHTML = html + "</div>"; nodes.appendChild(el);
+    });
+    // links: for every array input draw a bezier from the source node's right edge to the input row's left edge
+    Object.keys(COMFY).forEach(function (id) { var n = COMFY[id], tgt = nodes.querySelector('[data-id="' + id + '"]'); if (!tgt) return;
+      Array.prototype.forEach.call(tgt.querySelectorAll(".cin"), function (row) { var dot = row.querySelector(".dot"); if (!dot) return; var k = row.querySelector(".k").textContent, ref = n.inputs[k]; var src = nodes.querySelector('[data-id="' + ref[0] + '"]'); if (!src) return;
+        var x1 = src.offsetLeft + src.offsetWidth, y1 = src.offsetTop + 14, x2 = tgt.offsetLeft, y2 = tgt.offsetTop + row.offsetTop + row.offsetHeight / 2;
+        var p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", "M" + x1 + " " + y1 + " C" + (x1 + 60) + " " + y1 + " " + (x2 - 60) + " " + y2 + " " + x2 + " " + y2); p.setAttribute("stroke", "rgba(54,224,255,.55)"); p.setAttribute("stroke-width", "1.6"); p.setAttribute("fill", "none"); svg.appendChild(p); }); });
+  }
+  function comfyCollect() { var wf = JSON.parse(JSON.stringify(COMFY)); document.querySelectorAll("#comfy-nodes .cnode").forEach(function (el) { var id = el.dataset.id; el.querySelectorAll("[data-k]").forEach(function (inp) { var k = inp.dataset.k, cur = wf[id].inputs[k]; if (inp.disabled) return; if (inp.type === "checkbox") wf[id].inputs[k] = inp.checked; else if (typeof cur === "number") { var num = parseFloat(inp.value); wf[id].inputs[k] = isFinite(num) ? num : cur; } else wf[id].inputs[k] = inp.value; }); }); return wf; }
+  $("comfy-save").onclick = function () { api("/api/upscaler/workflow", { workflow: comfyCollect() }).then(function (r) { COMFY = r.workflow; $("comfy-note").textContent = "· custom parameters saved — used by every upscale from now on"; comfyDraw(); }); };
+  $("comfy-reset").onclick = function () { if (confirm("Reset every node to the bundled workflow?")) api("/api/upscaler/workflow", { reset: true }).then(function (r) { COMFY = r.workflow; $("comfy-note").textContent = "· bundled workflow"; comfyDraw(); }); };
+  /* ---- the tour (TurboFlow-style: a card per cell, dots, next/back/skip; auto on first visit) ---- */
+  var TOUR = [
+    { sel: "#cell-grab", pane: "studio", title: "Trello grab", text: "Scan the board to list the cards under each channel marker, tick the ones you want and grab: the app downloads the script, VO and cover, runs whisper on the GPU, measures the channel's ambience folder and writes Script\\packet.zip — the one file you drop into the writing-room chat. heal tree rebuilds any missing folder; index SFX measures the ambience folders; refresh SFX & CTA rewrites every packet." },
+    { sel: "#cell-jobs", pane: "studio", title: "Rendering", text: "Every job lands here with its progress: grabs, upscales, image fetches and renders. log opens a job's own log; stop after section and kill now in the header act on the running job." },
+    { sel: "#cell-titles", pane: "studio", title: "Titles", text: "Every title under <base>\\<CHANNEL>\\Titles. Tabs: to do, done, not ready, archived, all. Each row shows img (section stills), AI (AI images against the AI sections), sfx (ambience sounds cached) and parts (rendered sections). RUN fetches the stills, fetches the ambience, renders every part natively and assembles the whole video with fades, letterbox, the CTAs, the voice and the ambience bed. The other buttons: img fetches stills now, prompts opens the AI prompts file, sfx fetches ambience now, upscale sends raw AI images to the oil upscaler, AI import takes a bulk tool's downloads, archive sets a title aside." },
+    { sel: "#cell-video", pane: "studio", title: "Final video", text: "Frame rate (30 or 60), the cinematic letterbox, whether to keep the rendered parts after the final (faster re-runs), and what to do with sections that have no bundle object." },
+    { sel: "#cell-render", pane: "studio", title: "Render engine", text: "Workers (0 = auto from your GPU), NVENC or x264, quality, fades, the table lean of the maps, the highlight style, the macro-lens finish. The engine is native (Skia + ffmpeg) — no browser." },
+    { sel: "#cell-audio", pane: "studio", title: "Voice & ambience", text: "The ambience bed sits N dB under the measured voice (18 = faint, 24 = barely there); the LUFS value is only a ceiling it never exceeds. The channel's AMBIENCE_LUFS in the suffix file overrides the ceiling." },
+    { sel: "#cell-grabcfg", pane: "studio", title: "Grab & whisper", text: "The whisper model and device (CUDA on your NVIDIA card), batched inference for speed, the writing-room chat URL to open after a grab, and automatic whisper installation at startup." },
+    { sel: "#cell-paths", pane: "studio", title: "Paths & contact", text: "The base folder (the whole tree is created and healed under it), a Chrome path only if the Chrome engine is ever used, and the Wikimedia contact that raises the download rate limit. Save applies everything; the two install buttons fetch the prerequisites and the whisper runtime into the app's own folder." },
+    { sel: "#cell-up-cfg", pane: "upscaler", title: "Upscaler", text: "Your Vercel deployment of Ruvi's Batch Oil Upscaler (ComfyUI on RunPod). An optional positive prompt goes in front of the workflow prompt; images at a time matches your RunPod max workers; originals are kept in AI Images\\_raw." },
+    { sel: "#cell-up-titles", pane: "upscaler", title: "AI images per title", text: "Every title with AI images and its raw / painted counts. upscale sends the raw ones one job each, polls them and writes <n>_painted beside the originals; the section renderer picks the painted files up automatically. Failed images stay raw — press again to retry just those." },
+    { sel: "#cell-up-web", pane: "upscaler", title: "The web UI", text: "The same upscaler page, opened in a window or embedded here, for one-off batches outside a title." },
+    { sel: "#cell-up-comfy", pane: "upscaler", title: "ComfyUI workflow", text: "The worker's nodes on a canvas like ComfyUI's: checkpoint, VAE, LoRA strengths, the upscale model, the positive and negative prompts, every Ultimate SD Upscale parameter (scale, steps, cfg, sampler, scheduler, denoise, tiles, seam fixing). Edit, save, and every later upscale uses it; reset returns to the bundled workflow." }
+  ];
+  var tourI = 0, tourOn = false;
+  function tourShow(i) {
+    tourI = i; var s = TOUR[i]; if (!s) return tourEnd();
+    document.querySelectorAll(".toptab").forEach(function (b) { if (b.dataset.pane === s.pane && !b.classList.contains("on")) b.click(); });
+    document.querySelectorAll(".tour-target").forEach(function (e) { e.classList.remove("tour-target"); });
+    var el = document.querySelector(s.sel); if (!el) return tourShow(i + 1);
+    el.classList.add("tour-target"); el.scrollIntoView({ block: "center", behavior: "smooth" });
+    $("tour").style.display = ""; $("tour-step").textContent = "step " + (i + 1) + " of " + TOUR.length; $("tour-title").textContent = s.title; $("tour-text").textContent = s.text;
+    $("tour-dots").innerHTML = TOUR.map(function (_, k) { return '<i class="' + (k === i ? "on" : "") + '"></i>'; }).join(""); $("tour-back").disabled = i === 0; $("tour-next").textContent = i === TOUR.length - 1 ? "done" : "next";
+    setTimeout(function () { tourMask(el); }, 420);
+    setTimeout(function () { var r = el.getBoundingClientRect(), c = $("tour-card"), ch = c.offsetHeight || 180, top = r.bottom + 12, left = Math.max(12, Math.min(window.innerWidth - 352, r.left)); if (top + ch > window.innerHeight - 12) top = Math.max(12, r.top - ch - 12); c.style.top = top + "px"; c.style.left = left + "px"; }, 350);
+  }
+  function tourEnd() { tourOn = false; $("tour").style.display = "none"; tourMask(null); document.querySelectorAll(".tour-target").forEach(function (e) { e.classList.remove("tour-target"); }); try { localStorage.setItem("ruvi_tour_v1", "1"); } catch (e) {} }
+  $("tour-btn").onclick = function () { tourOn = true; tourShow(0); };
+  $("tour-next").onclick = function () { if (tourI >= TOUR.length - 1) tourEnd(); else tourShow(tourI + 1); };
+  $("tour-back").onclick = function () { if (tourI > 0) tourShow(tourI - 1); };
+  $("tour-skip").onclick = tourEnd;
+  document.addEventListener("keydown", function (e) { if (!tourOn) return; if (e.key === "Escape") tourEnd(); if (e.key === "ArrowRight" || e.key === "Enter") $("tour-next").click(); if (e.key === "ArrowLeft") $("tour-back").click(); });
+  try { if (!localStorage.getItem("ruvi_tour_v1")) setTimeout(function () { tourOn = true; tourShow(0); }, 1200); } catch (e) {}
+
+})();
+
+</script>
+</body>
+</html>

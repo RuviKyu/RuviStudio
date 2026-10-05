@@ -1,0 +1,301 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>RUVI Conductor renderer</title>
+<style>
+  html,body{margin:0;background:#000;overflow:hidden;width:1920px;height:1080px}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden;background:#000}
+  #bg{position:absolute;left:0;top:0;width:1920px;height:1080px;object-fit:cover}
+  #view{position:absolute;left:0;top:0;width:1920px;height:1080px;perspective:2200px;perspective-origin:50% 50%}
+  #world{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-style:flat;will-change:transform}
+  #map{position:absolute;transform-origin:0 0;image-rendering:auto;backface-visibility:hidden}
+  .layer{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none}
+  .pin{position:absolute;width:0;height:0;transform-origin:0 0;will-change:transform}
+  .pin svg{position:absolute;overflow:visible}
+  .label{position:absolute;white-space:nowrap;color:#fff;font-family:"Algerian","Cinzel","Georgia",serif;text-align:center;transform:translate(-50%,-50%);transform-origin:50% 50%;will-change:transform;
+         paint-order:stroke fill;-webkit-text-stroke:0 #000}
+  .hl-g,.hl-r{will-change:transform}
+  #edge{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none;backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);
+        -webkit-mask-image:radial-gradient(ellipse 78% 76% at 50% 50%, rgba(0,0,0,0) 62%, rgba(0,0,0,1) 100%);mask-image:radial-gradient(ellipse 78% 76% at 50% 50%, rgba(0,0,0,0) 62%, rgba(0,0,0,1) 100%)}
+  /* stills */
+  #still{position:absolute;left:0;top:0;width:1920px;height:1080px;perspective:2200px;perspective-origin:50% 50%}
+  .st-layer{position:absolute;transform-origin:50% 50%;transform-style:flat}
+  .card{position:relative;width:2752px;height:1534px;overflow:hidden;background:#0a0a0a}
+  .card .cbg{position:absolute;left:0;top:0;width:2752px;height:1534px}
+  .card .portrait{position:absolute;transform-origin:50% 50%}
+  .card .mat{position:absolute;background:#eee3c9;box-shadow:12px 14px 40px rgba(0,0,0,.6)}
+  .card .name{position:absolute;color:#fff;font-family:"Pirata One","Germania One","Old English Text MT","Algerian",serif;text-align:center;white-space:pre;line-height:1.05}
+</style></head>
+<body>
+<div id="stage">
+  <img id="bg" alt="" />
+  <div id="view"><div id="world"><img id="map" alt="" /><svg id="routes" class="layer"></svg><div id="hl" class="layer"></div><div id="pins" class="layer"></div></div></div>
+  <div id="still" hidden></div>
+  <div id="edge"></div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var CFG = { // mirrors the After Effects engine's CONFIG (only what renders)
+    pinRadius: 4, pinColor: "#d92121", pinStroke: "#000", pinStrokeW: 1.5, needleColor: "#3d3d45",
+    clusterFrac: 0.02, clusterStackX: 46, clusterStackGap: 1.55, camClusterZoom: 0.16, camLabelAllow: 70, camMinMove: 1.0,
+    labelFontSize: 11, labelClusterX: 54, leaderColor: "rgba(26,26,26,.72)", leaderWidth: 1.2,
+    appearDuration: 0.5, appearLead: 0.3, popOvershoot: 1.07,
+    routeColor: "#000", routeWidth: 1, routeCasingWidth: 2, routeDash: 3, routeGap: 5,
+    hlColor: "rgba(255,199,64,1)", hlRadius: 12, hlGlowOpacity: 0.5, hlRingW: 1, hlPulseMax: 1.85, hlPulsePeriod: 1.6,
+    hlStyle: "ink", hlInk: "rgba(112,26,26,0.92)", hlInkFill: "rgba(190,60,40,0.10)", hlInkW: 1.5, hlTraceDur: 0.7, hlInkRadius: 16,
+    camZoomEnd: 0.21, camPinSafe: 0.74, startRevealMinLead: 0.4, startRevealRate: 0.06, startRevealMinFrac: 0.15, rushZoomSens: 0.5,
+    panMaxScreenSpeed: 0.55, panLateMax: 1.0,
+    idleZoomAfter: 5.0, idleZoomPct: 2.5, idleZoomMax: 2.2,
+    camTiltX: 17, camRotXAmp: 6, camRotXFreq: 0.045, camRotYAmp: 5, camRotYFreq: 0.070, camRotZAmp: 4, camRotZFreq: 0.060, camEnergy: 1
+  };
+  var W = 1920, H = 1080, S = { kind: "", t: 0, dur: 0, sizef: 1, mapFit: 1, mapX: 0, mapY: 0, pins: [], keys: null, routes: null, hls: [], still: null };
+  var OV = 6;  // overlay oversampling: pins, labels and highlight rings are laid out OV× larger and scaled down by OV, so their raster is OV× — crisp at the closest camera zoom (1/0.16 ≈ 6)
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- keyframe interpolation (AE easy-ease / flow ≈ smoothstep between keys) ---------- */
+  function interp(keys, t, linearFirst) {
+    if (!keys.length) return null; if (t <= keys[0].t) return keys[0].v.slice(); if (t >= keys[keys.length - 1].t) return keys[keys.length - 1].v.slice();
+    for (var i = 1; i < keys.length; i++) if (t <= keys[i].t) {
+      var a = keys[i - 1], b = keys[i], u = (t - a.t) / Math.max(1e-6, b.t - a.t);
+      var e = (linearFirst && i === 1) ? (1 - Math.pow(1 - u, 2)) : (u * u * (3 - 2 * u));      // opening travel: ease-out only (already at cruise speed)
+      var v = []; for (var k = 0; k < a.v.length; k++) v.push(a.v[k] + (b.v[k] - a.v[k]) * e); return v;
+    }
+    return keys[keys.length - 1].v.slice();
+  }
+
+  /* ---------- MAP SCENE ---------- */
+  function buildMap(spec) {
+    S.kind = "map"; S.dur = spec.durationSec; var d = spec.data, MW = d.map_width, MH = d.map_height;
+    var fit = Math.min(W / MW, H / MH); S.mapFit = fit; S.mapX = (W - MW * fit) / 2; S.mapY = (H - MH * fit) / 2; S.MW = MW; S.MH = MH;
+    var m = $("map"); m.src = spec.mapUrl; m.style.left = S.mapX + "px"; m.style.top = S.mapY + "px";
+    // native-size layout + scale transform (the raster keeps the full sheet; the bundle's map_width/height may differ from the file on disk → scale accordingly once loaded)
+    m.style.width = MW + "px"; m.style.height = MH + "px"; m.style.transform = "scale(" + fit + ")"; m.style.transformOrigin = "0 0";
+    var dd = Math.sqrt(MW * fit * MW * fit + MH * fit * MH * fit) / Math.sqrt(W * W + H * H); S.sizef = Math.max(0.2, Math.min(4, dd));
+    $("bg").src = spec.bgUrl || ""; $("bg").style.display = spec.bgUrl ? "" : "none"; $("still").hidden = true; $("view").hidden = false; $("edge").style.display = (spec.edgeBlur === false) ? "none" : "";
+    var sf = S.sizef, locs = d.locations || [];
+    function cp(loc) { var x = (loc.xNorm != null ? loc.xNorm * MW : loc.x), y = (loc.yNorm != null ? loc.yNorm * MH : loc.y); return [S.mapX + x * fit, S.mapY + y * fit]; }
+    var pts = locs.map(cp), diag = Math.sqrt(Math.pow(MW * fit, 2) + Math.pow(MH * fit, 2));
+    // clusters (2 % of the map diagonal)
+    var CR = CFG.clusterFrac * diag, clOf = pts.map(function () { return -1; }), clusters = [];
+    pts.forEach(function (p, i) { if (clOf[i] >= 0) return; var id = clusters.length; clOf[i] = id; var mem = [i]; for (var j = i + 1; j < pts.length; j++) { if (clOf[j] >= 0) continue; if (Math.hypot(pts[j][0] - p[0], pts[j][1] - p[1]) <= CR) { clOf[j] = id; mem.push(j); } } clusters.push(mem); });
+    var midX = S.mapX + MW * fit / 2, pinsEl = $("pins"); pinsEl.innerHTML = ""; S.pins = [];
+    var R = CFG.pinRadius * sf, NL = CFG.pinRadius * 2.7 * sf, fs = CFG.labelFontSize * sf;
+    clusters.forEach(function (mem) {
+      var isCl = mem.length >= 2, cx = 0, cy = 0; mem.forEach(function (i) { cx += pts[i][0]; cy += pts[i][1]; }); cx /= mem.length; cy /= mem.length;
+      var side = (cx < midX) ? -1 : 1;
+      mem.sort(function (a, b) { return pts[a][1] - pts[b][1]; });
+      mem.forEach(function (i, k) {
+        var loc = locs[i], p = pts[i], t0 = (loc.timeMs || 0) / 1000 - CFG.appearLead; if (t0 < 0) t0 = 0;
+        var el = document.createElement("div"); el.className = "pin"; el.style.left = p[0] + "px"; el.style.top = p[1] + "px";
+        var svgW = (R * 2 + 4), svgH = NL + R * 2 + 4, ox = -svgW / 2, oy = -(svgH - 2);
+        var svg = '<svg width="' + (svgW * OV) + '" height="' + (svgH * OV) + '" viewBox="' + ox + ' ' + oy + ' ' + svgW + ' ' + svgH + '" style="left:' + (ox * OV) + 'px;top:' + (oy * OV) + 'px">';
+        if (isCl) svg += '<circle cx="0" cy="0" r="' + (Math.max(1.5, 1 * sf)) + '" fill="' + (loc.color || CFG.pinColor) + '" stroke="#000" stroke-width="' + (1.5 * sf) + '"/>';
+        else { var nw = Math.max(0.8, CFG.pinRadius * 0.3) * sf, hc = -(NL + R);
+          svg += '<path d="M0,0 L' + (-nw) + ',' + (-NL) + ' L' + nw + ',' + (-NL) + ' Z" fill="' + CFG.needleColor + '" stroke="#000" stroke-width="' + (CFG.pinStrokeW * sf * 0.6) + '"/>';
+          svg += '<circle cx="0" cy="' + hc + '" r="' + R + '" fill="' + (loc.color || CFG.pinColor) + '" stroke="#000" stroke-width="' + (CFG.pinStrokeW * sf) + '"/>';
+          svg += '<circle cx="' + (-R * 0.3) + '" cy="' + (hc - R * 0.3) + '" r="' + (R * 0.28) + '" fill="rgba(255,255,255,.55)"/>'; }
+        svg += "</svg>"; el.innerHTML = svg; pinsEl.appendChild(el);
+        // label: solo → centred above the pin; cluster → a tidy stack to the side with a leader
+        var lab = document.createElement("div"); lab.className = "label"; lab.textContent = loc.name || ""; lab.style.fontSize = (fs * OV) + "px"; if (isCl) { lab.style.transformOrigin = (side > 0 ? "0% 50%" : "100% 50%"); lab.dataset.anchor = side > 0 ? "left" : "right"; } lab.style.webkitTextStroke = (1 * sf * 0.35 * OV) + "px #000";
+        lab.style.textShadow = "0 0 " + (1 * OV) + "px #000, 0 0 " + (6 * OV) + "px rgba(0,0,0,.9), 0 0 " + (12 * OV) + "px rgba(0,0,0,.7)";
+        var lx, ly;
+        if (isCl) { var stackH = mem.length * fs * CFG.clusterStackGap; lx = cx + side * CFG.clusterStackX * sf; ly = cy - stackH / 2 + fs * CFG.clusterStackGap * (k + 0.5); }
+        else { lx = p[0]; ly = p[1] - (CFG.pinRadius * 4.7 * sf + fs * 0.7 + 4 * sf); }
+        lab.style.left = lx + "px"; lab.style.top = ly + "px"; pinsEl.appendChild(lab);
+        var lead = null;
+        if (isCl) { lead = document.createElementNS("http://www.w3.org/2000/svg", "line"); var ex = lx - side * 3 * sf, ey = ly, L = Math.hypot(ex - p[0], ey - p[1]) || 1, ux = (ex - p[0]) / L, uy = (ey - p[1]) / L, s0 = Math.min(2.5 * sf, L * 0.3);
+          lead.setAttribute("x1", p[0] + ux * s0); lead.setAttribute("y1", p[1] + uy * s0); lead.setAttribute("x2", ex); lead.setAttribute("y2", ey); lead.setAttribute("stroke", CFG.leaderColor); lead.setAttribute("stroke-width", CFG.leaderWidth * sf); lead.setAttribute("stroke-linecap", "round"); lead.style.opacity = 0; $("routes").appendChild(lead); }
+        S.pins.push({ el: el, lab: lab, lead: lead, t0: t0, p: p });
+      });
+    });
+    // route (dashed, with casing), revealed pin → pin between arrivals through an SVG luminance mask
+    var rt = $("routes"); S.routes = null;
+    Array.prototype.slice.call(rt.querySelectorAll("g.route, mask")).forEach(function (n) { n.remove(); });
+    var mode = String(d.render || "pins").toLowerCase();
+    if ((mode === "route" || d.route === true) && locs.length >= 2) {
+      var order = locs.map(function (l, i) { return i; }).sort(function (a, b) { return (locs[a].timeMs || 0) - (locs[b].timeMs || 0); });
+      var pathD = "", segs = [];
+      order.forEach(function (i, k) { var p = pts[i]; if (!k) { pathD += "M" + p[0] + "," + p[1]; return; } var q = pts[order[k - 1]], mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2, dx = p[0] - q[0], dy = p[1] - q[1], bow = 0.1; pathD += " Q" + (mx - dy * bow) + "," + (my + dx * bow) + " " + p[0] + "," + p[1]; segs.push({ t0: (locs[order[k - 1]].timeMs || 0) / 1000, t1: (locs[i].timeMs || 0) / 1000 }); });
+      var NS = "http://www.w3.org/2000/svg", mask = document.createElementNS(NS, "mask"), mp = document.createElementNS(NS, "path"), g = document.createElementNS(NS, "g"), cas = document.createElementNS(NS, "path"), lin = document.createElementNS(NS, "path");
+      mask.setAttribute("id", "routemask"); mask.setAttribute("maskUnits", "userSpaceOnUse"); mask.setAttribute("x", "-99999"); mask.setAttribute("y", "-99999"); mask.setAttribute("width", "999999"); mask.setAttribute("height", "999999");
+      mp.setAttribute("d", pathD); mp.setAttribute("fill", "none"); mp.setAttribute("stroke", "#fff"); mp.setAttribute("stroke-width", (CFG.routeCasingWidth * sf * 3)); mp.setAttribute("stroke-linecap", "round"); mask.appendChild(mp);
+      g.setAttribute("class", "route"); g.setAttribute("mask", "url(#routemask)");
+      cas.setAttribute("d", pathD); cas.setAttribute("fill", "none"); cas.setAttribute("stroke", "#000"); cas.setAttribute("stroke-opacity", "0.35"); cas.setAttribute("stroke-width", CFG.routeCasingWidth * sf * 1.4);
+      lin.setAttribute("d", pathD); lin.setAttribute("fill", "none"); lin.setAttribute("stroke", CFG.routeColor); lin.setAttribute("stroke-width", CFG.routeWidth * sf * 1.4); lin.setAttribute("stroke-dasharray", (CFG.routeDash * sf) + " " + (CFG.routeGap * sf));
+      g.appendChild(cas); g.appendChild(lin); rt.insertBefore(mask, rt.firstChild); rt.insertBefore(g, mask.nextSibling);
+      var len = lin.getTotalLength(); S.routes = { mp: mp, len: len, segs: segs };
+    }
+    // highlights: "ink" = an ink outline drawn on around the place (its traced shape when the bundle has one), then a faint wash; "glow" = the old gold ring
+    var hl = $("hl"); hl.innerHTML = ""; S.hls = [];
+    var anyFlag = locs.some(function (l) { return l.highlight === true; }), NS2 = "http://www.w3.org/2000/svg";
+    function inkPts(loc, p) {
+      var pts2 = [], shape = (loc.shapeNorm && loc.shapeNorm.length >= 3) ? loc.shapeNorm.map(function (v) { return [S.mapX + v[0] * MW * fit, S.mapY + v[1] * MH * fit]; }) : (loc.shape && loc.shape.length >= 3) ? loc.shape.map(function (v) { return [S.mapX + v[0] * fit, S.mapY + v[1] * fit]; }) : null;
+      if (shape) return shape;
+      var r = CFG.hlInkRadius * sf, seed = 11; function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280 - 0.5; } var wob = []; for (var w = 0; w < 6; w++) wob.push(rnd() * 0.12);
+      for (var q = 0; q < 48; q++) { var ang = -Math.PI * 0.62 + Math.PI * 2 * q / 48, rr = r * (1 + wob[q % 6] * 0.5 + wob[(q + 1) % 6] * 0.5 + Math.sin(ang * 3) * 0.03); pts2.push([p[0] + Math.cos(ang) * rr * 1.08, p[1] + Math.sin(ang) * rr * 0.92]); }
+      return pts2;
+    }
+    locs.forEach(function (loc, i) {
+      var is = loc.highlight === true || (mode === "highlight" && !anyFlag); if (!is) return;
+      var p = pts[i];
+      if ((CFG.hlStyle || "ink") === "glow") {
+        var r = CFG.hlRadius * sf, g = document.createElement("div"); g.className = "hl-g"; g.style.cssText = "position:absolute;left:" + (p[0] - r * OV) + "px;top:" + (p[1] - r * OV) + "px;width:" + (2 * r * OV) + "px;height:" + (2 * r * OV) + "px;border-radius:50%;background:radial-gradient(circle, rgba(255,199,64,.55) 0%, rgba(255,199,64,0) 70%);transform-origin:50% 50%;transform:scale(" + (1 / OV) + ");";
+        var ring = document.createElement("div"); ring.className = "hl-r"; ring.style.cssText = "position:absolute;left:" + (p[0] - r * OV) + "px;top:" + (p[1] - r * OV) + "px;width:" + (2 * r * OV) + "px;height:" + (2 * r * OV) + "px;border-radius:50%;border:" + (CFG.hlRingW * sf * OV) + "px solid rgba(255,199,64,.9);transform-origin:50% 50%;";
+        hl.appendChild(g); hl.appendChild(ring); S.hls.push({ glow: true, g: g, ring: ring, t0: (loc.timeMs || 0) / 1000 }); return;
+      }
+      var ip = inkPts(loc, p), dpath = "M" + ip.map(function (q) { return q[0].toFixed(2) + "," + q[1].toFixed(2); }).join("L") + "Z";
+      var svg = document.createElementNS(NS2, "svg"); svg.setAttribute("class", "layer"); svg.style.overflow = "visible";
+      var fill = document.createElementNS(NS2, "path"); fill.setAttribute("d", dpath); fill.setAttribute("fill", CFG.hlInkFill); fill.setAttribute("stroke", "none"); fill.style.opacity = "0";
+      var bleed = document.createElementNS(NS2, "path"); bleed.setAttribute("d", dpath); bleed.setAttribute("fill", "none"); bleed.setAttribute("stroke", "rgba(112,26,26,0.35)"); bleed.setAttribute("stroke-width", CFG.hlInkW * sf * 2.2); bleed.setAttribute("stroke-linecap", "round"); bleed.setAttribute("stroke-linejoin", "round");
+      var ink = document.createElementNS(NS2, "path"); ink.setAttribute("d", dpath); ink.setAttribute("fill", "none"); ink.setAttribute("stroke", CFG.hlInk); ink.setAttribute("stroke-width", CFG.hlInkW * sf); ink.setAttribute("stroke-linecap", "round"); ink.setAttribute("stroke-linejoin", "round");
+      svg.appendChild(fill); svg.appendChild(bleed); svg.appendChild(ink); hl.appendChild(svg);
+      var len = ink.getTotalLength(); [bleed, ink].forEach(function (e) { e.setAttribute("stroke-dasharray", "0 " + (len + 10)); });
+      S.hls.push({ ink: ink, bleed: bleed, fill: fill, len: len, t0: (loc.timeMs || 0) / 1000 });
+    });
+    S.keys = planCamera(pts, locs, diag, fit, MW, MH);
+  }
+
+  /* the travel camera — shared with lib/render/camera.js (keep in step) */
+function clampView(C, z, S, MW, MH, fit, soft) {
+    var hw = W * z / 2, hh = H * z / 2, L = S.mapX, R = S.mapX + MW * fit, T = S.mapY, B = S.mapY + MH * fit, x = C[0], y = C[1];
+    if (R - L >= 2 * hw) x = Math.max(L + hw, Math.min(R - hw, x)); else if (!soft) x = (L + R) / 2;
+    if (B - T >= 2 * hh) y = Math.max(T + hh, Math.min(B - hh, y)); else if (!soft) y = (T + B) / 2;
+    return [x, y];
+}
+  function planCameraShared(pts, locs, mapDiag, fit, MW, MH, S, dur) {
+    var compW = W, compH = H, mapL = S.mapX, mapR = S.mapX + MW * fit, mapT = S.mapY, mapB = S.mapY + MH * fit, sf = S.sizef;
+    var mapFit = Math.max((mapR - mapL) / compW, (mapB - mapT) / compH), capWide = mapFit * 1.10;
+    var idleCap = Math.min(CFG.camZoomEnd * CFG.idleZoomMax, capWide); if (idleCap < CFG.camZoomEnd) idleCap = CFG.camZoomEnd;
+    var ts = locs.map(function (l) { return (l.timeMs || 0) / 1000; }), tEnd = dur;
+    if (!pts.length) return { pos: [{ t: 0, v: [compW / 2, compH / 2] }], sc: [{ t: 0, v: [mapFit] }], linearFirst: false };
+    var CR = CFG.clusterFrac * mapDiag, midX = (mapL + mapR) / 2, cof = pts.map(function () { return -1; }), cmem = [];
+    pts.forEach(function (p, a) { if (cof[a] >= 0) return; var gid = cmem.length; cof[a] = gid; var mm = [a]; for (var b = a + 1; b < pts.length; b++) { if (cof[b] >= 0) continue; if (Math.hypot(pts[b][0] - p[0], pts[b][1] - p[1]) <= CR) { cof[b] = gid; mm.push(b); } } cmem.push(mm); });
+    var sCx = [], sCy = [], sZ = [], sT = [];
+    cmem.forEach(function (mm) {
+      var mnx = 1e9, mny = 1e9, mxx = -1e9, mxy = -1e9, t0g = 1e18; mm.forEach(function (q) { var P = pts[q]; mnx = Math.min(mnx, P[0]); mxx = Math.max(mxx, P[0]); mny = Math.min(mny, P[1]); mxy = Math.max(mxy, P[1]); t0g = Math.min(t0g, ts[q]); });
+      var pcx = (mnx + mxx) / 2, pcy = (mny + mxy) / 2, cxg, cyg, zg;
+      if (mm.length >= 2) { var side = (pcx < midX) ? -1 : 1, hwl = CFG.camLabelAllow * sf / 2, lblCx = pcx + side * CFG.clusterStackX * sf, stackH = mm.length * CFG.labelFontSize * CFG.clusterStackGap * sf;
+        var fLx = Math.min(mnx, lblCx - hwl), fRx = Math.max(mxx, lblCx + hwl), fTy = Math.min(mny, pcy - stackH / 2 - CFG.labelFontSize * sf), fBy = Math.max(mxy, pcy + stackH / 2 + CFG.labelFontSize * sf);
+        cxg = (fLx + fRx) / 2; cyg = (fTy + fBy) / 2; zg = Math.max((fRx - fLx) / (compW * CFG.camPinSafe), (fBy - fTy) / (compH * CFG.camPinSafe)); if (zg < CFG.camClusterZoom) zg = CFG.camClusterZoom; if (zg > capWide) zg = capWide; }
+      else { cxg = pcx; cyg = pcy; zg = CFG.camZoomEnd; var vpad = CFG.labelFontSize * 2.4 * sf, zNeed = vpad * 2 / (compH * CFG.camPinSafe); if (zNeed > zg) zg = zNeed; if (zg > capWide) zg = capWide; }
+      sCx.push(cxg); sCy.push(cyg); sZ.push(zg); sT.push(t0g);
+    });
+    var ord = sT.map(function (t, i) { return i; }).sort(function (p, q) { return sT[p] - sT[q]; }), G = ord.length;
+    var sens = CFG.rushZoomSens, rushThr = (sens <= 0.02) ? 1e9 : ((1.05 - sens) * 0.09 + 0.008);
+    var pos = [], sc = [];
+    function keyP(t, C, z) { var Q = clampView(C, z != null ? z : CFG.camZoomEnd, S, MW, MH, fit, false); pos.push({ t: t, v: [Q[0], Q[1]] }); } function keyS(t, z) { sc.push({ t: t, v: [z] }); }
+    var f0 = ord[0], t1 = sT[f0]; if (t1 < 0.08) t1 = 0.08; var lead = t1, revealOn = false;
+    if (lead >= CFG.startRevealMinLead) {
+      var ax, ay, al; if (G > 1) { ax = sCx[f0] - sCx[ord[1]]; ay = sCy[f0] - sCy[ord[1]]; al = Math.hypot(ax, ay); if (al < 0.5) { ax = 1; ay = -0.55; al = Math.hypot(ax, ay); } }
+      else { ax = (mapL + mapR) / 2 - sCx[f0]; ay = (mapT + mapB) / 2 - sCy[f0]; al = Math.hypot(ax, ay); if (al < mapDiag * 0.04) { ax = 1; ay = -0.55; al = Math.hypot(ax, ay); } }
+      // the opening: the camera is always on its way to the first place — one eased approach filling the whole lead (frame 0 → first pin)
+      // from a point up the sheet in the direction away from the next place (or towards the map centre); never stagnant at the open
+      var ux = ax / al, uy = ay / al, viewW = compW * sZ[f0], d0 = CFG.startRevealRate * viewW * lead, dMax = mapDiag * 0.38; if (d0 > dMax) d0 = dMax; var dMin = viewW * CFG.startRevealMinFrac; if (d0 < dMin) d0 = dMin;
+      var P0 = [sCx[f0], sCy[f0]], cands = [[ux, uy], [-uy, ux], [uy, -ux]]; var mc = [(mapL + mapR) / 2 - P0[0], (mapT + mapB) / 2 - P0[1]], ml = Math.hypot(mc[0], mc[1]) || 1; cands.push([mc[0] / ml, mc[1] / ml]);
+      var best = null, bestD = -1; cands.forEach(function (u) { var Q = clampView([P0[0] + u[0] * d0, P0[1] + u[1] * d0], sZ[f0], S, MW, MH, fit, false), dd = Math.hypot(Q[0] - P0[0], Q[1] - P0[1]); if (dd > bestD) { bestD = dd; best = Q; } });
+      if (bestD < 2) best = P0;
+      keyP(0, best, sZ[f0]); keyS(0, sZ[f0]); keyP(t1, P0, sZ[f0]); keyS(t1, sZ[f0]); revealOn = false;             // ease in at frame 0, ease out onto the pin
+    } else { keyP(t1, [sCx[f0], sCy[f0]], sZ[f0]); keyS(t1, sZ[f0]); }
+    var tArr = [t1], prevT = t1;
+    for (var gA = 1; gA < G; gA++) { var tA = sT[ord[gA]]; if (tA < prevT + CFG.camMinMove) tA = prevT + CFG.camMinMove; if (tA > tEnd) tA = tEnd; tArr.push(tA); prevT = tA; }
+    var idleFrom = tArr[G - 1];
+    // between places: leave at the pin's time, arrive at the next pin's time, one smooth (easy-ease) pan at constant zoom — the AE keyframes.
+    // when that would be too fast the arrival slips (never the departure), up to panLateMax seconds; the next move then starts from the late arrival.
+    var arrive = tArr.slice();
+    for (var gH = 1; gH < G; gH++) {
+      var aI = ord[gH - 1], bI = ord[gH], tA = arrive[gH - 1], tB = tArr[gH], zA = sZ[aI], zB = sZ[bI];
+      var dist = Math.hypot(sCx[bI] - sCx[aI], sCy[bI] - sCy[aI]), zMove = Math.max(zA, zB), vMax = CFG.panMaxScreenSpeed * compW * zMove;   // comp px/s at this zoom
+      var tNeed = vMax > 0 ? 1.5 * dist / vMax : 0;                                                                  // a smoothstep peaks at 1.5x its average speed
+      var gap = Math.max(0.05, tB - tA), late = Math.max(0, Math.min(CFG.panLateMax, tNeed - gap));
+      var tArrive = tB + late; if (gH + 1 < G && tArrive > tArr[gH + 1] - 0.2) tArrive = Math.max(tB, tArr[gH + 1] - 0.2); if (tArrive > tEnd) tArrive = tEnd;
+      arrive[gH] = tArrive;
+      keyP(tA, [sCx[aI], sCy[aI]], zA); keyS(tA, zA); keyP(tArrive, [sCx[bI], sCy[bI]], zB); keyS(tArrive, zB);
+    }
+    idleFrom = arrive[G - 1];
+    var park = tEnd - tArr[G - 1];
+    if (park > CFG.idleZoomAfter) { var grow = tEnd - idleFrom; if (grow > 0.5) { var zPark = sZ[ord[G - 1]] * (1 + (CFG.idleZoomPct / 100) * grow); if (zPark > idleCap) zPark = idleCap; if (zPark > sZ[ord[G - 1]] + 0.002) keyS(tEnd, zPark); } }
+    pos.sort(function (a, b) { return a.t - b.t; }); sc.sort(function (a, b) { return a.t - b.t; });
+    return { pos: pos, sc: sc, linearFirst: revealOn };
+  }
+
+  function planCamera(pts, locs, mapDiag, fit, MW, MH) { return planCameraShared(pts, locs, mapDiag, fit, MW, MH, S, S.dur); }
+  function seekMap(t) {
+    var K = S.keys, C = interp(K.pos, t, K.linearFirst), z = interp(K.sc, t, K.linearFirst)[0]; C = clampView(C, z, S, S.MW, S.MH, S.mapFit, true);
+    var E = CFG.camEnergy, rx = CFG.camTiltX + CFG.camRotXAmp * E * Math.sin(2 * Math.PI * CFG.camRotXFreq * t), ry = CFG.camRotYAmp * E * Math.sin(2 * Math.PI * CFG.camRotYFreq * t + 0.9), rz = CFG.camRotZAmp * E * Math.sin(2 * Math.PI * CFG.camRotZFreq * t + 2.1);
+    var w = $("world"); w.style.transformOrigin = C[0] + "px " + C[1] + "px 0";
+    w.style.transform = "translate3d(" + (W / 2 - C[0]) + "px," + (H / 2 - C[1]) + "px,0) rotateX(" + rx + "deg) rotateY(" + ry + "deg) rotateZ(" + rz + "deg) scale(" + (1 / z) + ")";
+    S.pins.forEach(function (p) {
+      var u = (t - p.t0) / CFG.appearDuration, s = 0, o = 0;
+      if (u >= 1) { s = 1; o = 1; } else if (u > 0) { var a = u / 0.65; if (u < 0.65) { var e = a * a * (3 - 2 * a); s = e * CFG.popOvershoot; } else { var b = (u - 0.65) / 0.35, e2 = b * b * (3 - 2 * b); s = CFG.popOvershoot + (1 - CFG.popOvershoot) * e2; } o = Math.min(1, u / 0.45); }
+      p.el.style.transform = "scale(" + (s / OV) + ")"; p.el.style.opacity = o; p.lab.style.transform = (p.lab.dataset.anchor === "left" ? "translate(0,-50%)" : p.lab.dataset.anchor === "right" ? "translate(-100%,-50%)" : "translate(-50%,-50%)") + " scale(" + (s / OV) + ")"; p.lab.style.opacity = o; if (p.lead) p.lead.style.opacity = o;
+    });
+    if (S.routes) { var r = S.routes, n = r.segs.length, done = 0; r.segs.forEach(function (sg) { if (t >= sg.t1) done += 1; else if (t > sg.t0) done += (t - sg.t0) / Math.max(0.05, sg.t1 - sg.t0); }); var frac = n ? Math.min(1, done / n) : 1; r.mp.setAttribute("stroke-dasharray", (r.len * frac) + " " + (r.len + 10)); }
+    S.hls.forEach(function (h) {
+      if (h.glow) { var u = Math.max(0, Math.min(1, (t - h.t0) / 0.6)); h.g.style.opacity = u * CFG.hlGlowOpacity * 2; var ph = ((t - h.t0) % CFG.hlPulsePeriod) / CFG.hlPulsePeriod, k = 1 + (CFG.hlPulseMax - 1) * (t >= h.t0 ? (ph < 0.5 ? ph * 2 : 2 - ph * 2) : 0); h.ring.style.transform = "scale(" + (k / OV) + ")"; h.ring.style.opacity = u * (1 - (k - 1) / (CFG.hlPulseMax - 1) * 0.7); return; }
+      if (t < h.t0) { h.ink.setAttribute("stroke-dasharray", "0 " + (h.len + 10)); h.bleed.setAttribute("stroke-dasharray", "0 " + (h.len + 10)); h.fill.style.opacity = "0"; return; }
+      var u2 = Math.min(1, (t - h.t0) / CFG.hlTraceDur), e = u2 * u2 * (3 - 2 * u2), vis = h.len * e, breathe = 0.82 + 0.18 * Math.sin((t - h.t0) * 1.9);
+      h.ink.setAttribute("stroke-dasharray", vis.toFixed(2) + " " + (h.len + 10)); h.bleed.setAttribute("stroke-dasharray", vis.toFixed(2) + " " + (h.len + 10)); h.ink.style.opacity = u2 < 1 ? 1 : (0.75 + 0.25 * breathe);
+      h.fill.style.opacity = u2 >= 1 ? Math.min(1, (t - h.t0 - CFG.hlTraceDur) / 0.5) : 0;
+    });
+  }
+
+  /* ---------- STILL SCENE (REF / CHAR) — the stills engine's poses in CSS 3D ---------- */
+  var SC = { cardW: 2752, cardH: 1534, cardFontSize: 300, cardFontMin: 150, cardTextY: 0.45, cardMargin: 0.05, cardGap: 0.03, portraitH_cut: 0.93, portraitH_frame: 0.82, portraitX: 0.75, portraitMaxW: 0.48, frameTilt: 3, frameMat: 0.011, zoomMin: 2.2, zoomMax: 3.8, tiltX: [25, 40], tiltY: [0, 22], tiltZ: [12, 24], landAt: 3.0, landScale: 0.6, flyScale: 1.35, tallAspect: 1.0 };
+  function srand(seed) { var s = (seed * 9301 + 49297) % 233280; return function () { s = (s * 9301 + 49297) % 233280; return s / 233280; }; }
+  function rng(r, a, b) { return a + (b - a) * r(); }
+  function poseKeys(w, h, F, move, energy, seed, entrySide, dur) {
+    var r = srand(seed * 7 + 13), en = energy > 0 ? energy : 1, cx = w / 2, cy = h / 2, sCover = Math.max(W / w, H / h), tEnd = Math.max(0.02, dur - 1 / 60);
+    function centredOn(s) { var px = W / 2 - (F[0] - cx) * s, py = H / 2 - (F[1] - cy) * s, hw = w * s / 2, hh = h * s / 2, xmin = W - hw, xmax = hw, ymin = H - hh, ymax = hh; if (xmin > xmax) px = W / 2; else px = Math.max(xmin, Math.min(xmax, px)); if (ymin > ymax) py = H / 2; else py = Math.max(ymin, Math.min(ymax, py)); return [px, py]; }
+    var tiltX = -rng(r, SC.tiltX[0], SC.tiltX[1]) * en, tiltY = rng(r, SC.tiltY[0], SC.tiltY[1]) * en * (r() < 0.5 ? -1 : 1), tiltZ = rng(r, SC.tiltZ[0], SC.tiltZ[1]) * en * (r() < 0.5 ? -1 : 1);
+    var pos = [], sc = [], ori = [];
+    if (move === "flyin_push") { var sContain = Math.min(W / w, H / h), sLand = sContain * SC.landScale, s0 = sLand * SC.flyScale, tLand = Math.min(SC.landAt, Math.max(0.6, dur * 0.15)), x0 = entrySide === "left" ? -(w * s0 / 2) - 40 : W + (w * s0 / 2) + 40, y0 = H / 2 + rng(r, -200, 300);
+      pos.push({ t: 0, v: [x0, y0] }, { t: tLand, v: [W / 2, H / 2] }, { t: tEnd, v: centredOn(sCover) }); sc.push({ t: 0, v: [s0] }, { t: tLand, v: [sLand] }, { t: tEnd, v: [sCover] }); ori.push({ t: 0, v: [tiltX * 0.6, tiltY, tiltZ] }, { t: tLand, v: [0, 0, 0] }, { t: tEnd, v: [0, 0, 0] }); }
+    else { var Z = 1 + (rng(r, SC.zoomMin, SC.zoomMax) - 1) * en, sStart = sCover * Z; pos.push({ t: 0, v: [W / 2 - (F[0] - cx) * sStart, H / 2 - (F[1] - cy) * sStart] }, { t: tEnd, v: [W / 2, H / 2] }); sc.push({ t: 0, v: [sStart] }, { t: tEnd, v: [sCover] }); ori.push({ t: 0, v: [tiltX, tiltY, tiltZ] }, { t: tEnd, v: [0, 0, 0] }); }
+    return { pos: pos, sc: sc, ori: ori };
+  }
+  function buildStill(spec) {
+    S.kind = "still"; S.dur = spec.durationSec; var d = spec.data, kind = String(d.still_type || "").toUpperCase(), w = spec.imageWidth, h = spec.imageHeight;
+    $("view").hidden = true; $("edge").style.display = "none"; var st = $("still"); st.hidden = false; st.innerHTML = ""; $("bg").src = spec.bgUrl || ""; $("bg").style.display = spec.bgUrl ? "" : "none";
+    var seed = parseInt((String(d.source_file || "").match(/(\d+)/) || [0, 1])[1], 10) + (kind === "CHAR" ? 100 : 0), energy = d.energy != null ? +d.energy : 1, move = String(d.move || "auto").toLowerCase();
+    var layer = document.createElement("div"); layer.className = "st-layer"; st.appendChild(layer);
+    if (kind === "REF") {
+      if (move === "auto") move = (w / h < SC.tallAspect) ? "flyin_push" : "pullout";
+      var img = document.createElement("img"); img.src = spec.imageUrl; img.style.width = w + "px"; img.style.height = h + "px"; img.style.display = "block"; layer.appendChild(img);
+      layer.style.width = w + "px"; layer.style.height = h + "px"; layer.style.left = "0"; layer.style.top = "0";
+      var F = [(d.focus && d.focus.xNorm != null ? d.focus.xNorm : 0.5) * w, (d.focus && d.focus.yNorm != null ? d.focus.yNorm : 0.5) * h], entry = String(d.entry || "").toLowerCase(); if (entry !== "left" && entry !== "right") entry = (seed % 2 ? "left" : "right");
+      S.still = { layer: layer, w: w, h: h, keys: poseKeys(w, h, F, move, energy, seed, entry, S.dur) };
+    } else {
+      var CW = SC.cardW, CH = SC.cardH, side = String(d.side || "right").toLowerCase() === "left" ? "left" : "right", tr = String(d.treatment || "auto").toLowerCase(), hasAlpha = !!spec.hasAlpha, bgk = String(d.background || "").toLowerCase();
+      if (tr === "auto") tr = hasAlpha ? "cutout" : (bgk === "dark" ? "blend" : "framed"); if (tr === "cutout" && !hasAlpha) tr = bgk === "dark" ? "blend" : "framed";
+      var card = document.createElement("div"); card.className = "card"; layer.appendChild(card); layer.style.width = CW + "px"; layer.style.height = CH + "px"; layer.style.left = "0"; layer.style.top = "0";
+      if (spec.bgUrl) { var cbg = document.createElement("img"); cbg.className = "cbg"; cbg.src = spec.bgUrl; card.appendChild(cbg); }
+      var crop = d.crop || {}, cx0 = (crop.xNorm || 0) * w, cy0 = (crop.yNorm || 0) * h, cw = (crop.wNorm != null ? crop.wNorm * w : w - cx0), ch = (crop.hNorm != null ? crop.hNorm * h : h - cy0);
+      var targetH = (tr === "framed" ? SC.portraitH_frame : SC.portraitH_cut) * CH, s = targetH / ch; if (cw * s > SC.portraitMaxW * CW) s = (SC.portraitMaxW * CW) / cw;
+      var dispW = cw * s, dispH = ch * s, px = (side === "right" ? SC.portraitX : 1 - SC.portraitX) * CW, py = tr === "framed" ? CH / 2 : (CH - dispH / 2), tilt = tr === "framed" ? (d.tilt != null ? +d.tilt : (side === "left" ? -SC.frameTilt : SC.frameTilt)) : 0;
+      if (tr === "framed") { var mw = SC.frameMat * CH, mat = document.createElement("div"); mat.className = "mat"; mat.style.cssText += "left:" + (px - dispW / 2 - mw) + "px;top:" + (py - dispH / 2 - mw) + "px;width:" + (dispW + 2 * mw) + "px;height:" + (dispH + 2 * mw) + "px;transform:rotate(" + tilt + "deg);"; card.appendChild(mat); }
+      var pw = document.createElement("div"); pw.className = "portrait"; pw.style.cssText = "left:" + (px - dispW / 2) + "px;top:" + (py - dispH / 2) + "px;width:" + dispW + "px;height:" + dispH + "px;overflow:hidden;transform:rotate(" + tilt + "deg);" + (tr === "blend" ? "mix-blend-mode:lighten;filter:contrast(1.06) brightness(0.98);" : "");
+      var pim = document.createElement("img"); pim.src = spec.imageUrl; pim.style.cssText = "position:absolute;left:" + (-cx0 * s) + "px;top:" + (-cy0 * s) + "px;width:" + (w * s) + "px;height:" + (h * s) + "px;"; pw.appendChild(pim);
+      if (tr === "blend") { var feather = document.createElement("div"); feather.style.cssText = "position:absolute;inset:0;box-shadow:inset 0 0 " + (90 * s * Math.max(0.4, Math.min(2.5, h / 1600))) + "px 30px #000;pointer-events:none;"; pw.appendChild(feather); }
+      card.appendChild(pw);
+      var name = String(d.name || ""); if (name) { var margin = SC.cardMargin * CW, gap = SC.cardGap * CW, halfDisp = dispW / 2 + (tr === "framed" ? SC.frameMat * CH : 0), x0 = side === "right" ? margin : (px + halfDisp + gap), x1 = side === "right" ? (px - halfDisp - gap) : (CW - margin), freeW = Math.max(200, x1 - x0);
+        var nm = document.createElement("div"); nm.className = "name"; nm.textContent = name; nm.style.fontSize = SC.cardFontSize + "px"; nm.style.left = x0 + "px"; nm.style.width = freeW + "px"; card.appendChild(nm);
+        var sz = SC.cardFontSize; while (nm.scrollWidth > freeW && sz > SC.cardFontMin) { sz = Math.max(SC.cardFontMin, Math.round(sz * 0.93)); nm.style.fontSize = sz + "px"; }
+        if (nm.scrollWidth > freeW) { var words = name.split(" "); if (words.length >= 2) { var mid = Math.ceil(words.length / 2); nm.textContent = words.slice(0, mid).join(" ") + "\n" + words.slice(mid).join(" "); sz = SC.cardFontSize; nm.style.fontSize = sz + "px"; while (nm.scrollWidth > freeW && sz > SC.cardFontMin) { sz = Math.max(SC.cardFontMin, Math.round(sz * 0.93)); nm.style.fontSize = sz + "px"; } } }
+        nm.style.top = (SC.cardTextY * CH - nm.offsetHeight / 2) + "px"; }
+      var fxImg = (d.face && d.face.xNorm != null) ? d.face.xNorm * w : (cx0 + cw * 0.5), fyImg = (d.face && d.face.yNorm != null) ? d.face.yNorm * h : (cy0 + ch * 0.28), fx = Math.max(0, Math.min(1, (fxImg - cx0) / cw)), fy = Math.max(0, Math.min(1, (fyImg - cy0) / ch));
+      var Fc = [px + (fx - 0.5) * dispW, py + (fy - 0.5) * dispH]; if (move === "auto") move = "pullout";
+      S.still = { layer: layer, w: CW, h: CH, keys: poseKeys(CW, CH, Fc, move, energy, seed, "right", S.dur) };
+    }
+  }
+  function seekStill(t) {
+    var K = S.still.keys, P = interp(K.pos, t), sc = interp(K.sc, t)[0], O = interp(K.ori, t), L = S.still.layer, w = S.still.w, h = S.still.h;
+    // AE orientation (X,Y,Z) on a layer whose anchor is its centre; position = where the anchor lands in the comp
+    L.style.transformOrigin = "50% 50%"; L.style.transform = "translate3d(" + (P[0] - w / 2) + "px," + (P[1] - h / 2) + "px,0) rotateX(" + O[0] + "deg) rotateY(" + O[1] + "deg) rotateZ(" + O[2] + "deg) scale(" + sc + ")";
+  }
+
+  /* ---------- API ---------- */
+  window.buildScene = function (spec) { if (spec.kind === "still") buildStill(spec); else buildMap(spec); S.t = -1; return waitAssets(); };
+  window.seek = function (t) { S.t = t; if (S.kind === "still") seekStill(t); else seekMap(t); return true; };
+  function waitAssets() { var imgs = Array.prototype.slice.call(document.images); return Promise.all(imgs.filter(function (i) { return i.src; }).map(function (i) { return i.complete && i.naturalWidth ? Promise.resolve() : new Promise(function (res) { i.onload = res; i.onerror = res; }); })).then(function () { return document.fonts ? document.fonts.ready : null; }).then(function () { return { ok: true, kind: S.kind, sizef: S.sizef, pins: S.pins.length }; }); }
+})();
+</script>
+</body></html>
