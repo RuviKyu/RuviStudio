@@ -1,5 +1,5 @@
 @echo off
-rem sync.bat — commit every change in this folder and push it to GitHub (then press Sync in the Claude Project).
+rem sync.bat - commit every change in this folder and push it to GitHub (then press Sync in the Claude Project).
 cd /d "%~dp0"
 git add -A
 git diff --cached --quiet && (echo nothing to push & pause & exit /b 0)
