@@ -1,6 +1,6 @@
 {
   "name": "ruvi-studio",
-  "version": "3.17.1",
+  "version": "3.18.0",
   "description": "Ruvi Studio — the whole history-video pipeline on one PC: Trello grab → packet zip → writing-room package → stills + AI images → native render → full video with fades, letterbox, VO and music remix. No Adobe apps, no browser.",
   "main": "studio.js",
   "scripts": {

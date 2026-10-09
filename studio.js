@@ -316,11 +316,13 @@ function existingRender(outBase, s) {
 }
 function underBase(tf) { try { var a = path.resolve(tf), r = path.resolve(config.base); if (process.platform === "win32") { a = a.toLowerCase(); r = r.toLowerCase(); } return a.indexOf(r + path.sep) === 0 && fs.statSync(path.resolve(tf)).isDirectory(); } catch (e) { return false; } }
 function titlesDir(ch) { var cd = path.join(config.base, ch), td = path.join(cd, TITLES); return fs.existsSync(td) ? td : cd; }
-var TITLES_CACHE = { at: 0, list: null, ttl: 1500 };
+var TITLES_CACHE = { at: 0, list: null, ttl: 4000 }, SLOW_SCAN_AT = 0;
 function invalidateTitles() { TITLES_CACHE.at = 0; TITLES_CACHE.list = null; }
 function allTitles() {
     if (TITLES_CACHE.list && Date.now() - TITLES_CACHE.at < TITLES_CACHE.ttl) return TITLES_CACHE.list;
-    var out = allTitlesScan(); TITLES_CACHE.list = out; TITLES_CACHE.at = Date.now(); return out;
+    var t0 = Date.now(), out = allTitlesScan(), ms = Date.now() - t0; TITLES_CACHE.list = out; TITLES_CACHE.at = Date.now(); TITLES_CACHE.ms = ms;
+    if (ms > 1500 && Date.now() - SLOW_SCAN_AT > 600000) { SLOW_SCAN_AT = Date.now(); glog("the title scan took " + (ms / 1000).toFixed(1) + " s for " + out.length + " title(s)" + (/My Drive|Google Drive|OneDrive|Dropbox/i.test(config.base) ? " — the base is on a synced drive; mark the CHANNELS folder 'Available offline' so metadata does not come from the cloud" : "")); }
+    return out;
 }
 var QIX = {};
 function qix(dirs) { var k = dirs.join("|"); if (!QIX[k]) QIX[k] = SFX.quickIndexes(dirs); return QIX[k]; }
@@ -493,7 +495,7 @@ function tick() {
             low.forEach(function (x) { try { fs.unlinkSync(x.still); } catch (e) {} });
             return downloadStills(j.titleFolder, info, function (m) { log(j, m); }, j).then(function () { info = inspect(j.titleFolder, channel, 0, tname); todo = info.specials.filter(function (s) { return j.force || !s.done; }); });
         }).then(function () {
-        var nWorkers = config.render.workers | 0; if (!nWorkers) nWorkers = Math.max(1, Math.min(encoderFor() === "nvenc" ? 6 : 4, Math.floor(os.cpus().length / 2)));   // NVENC takes the encode off the CPU → up to 6 parallel sections
+        var nWorkers = config.render.workers | 0; if (!nWorkers) { var encW = encoderFor(), ramGb = os.totalmem() / 1073741824; nWorkers = Math.max(1, Math.min(encW === "nvenc" ? 6 : (encW === "x264" ? 3 : 4), Math.floor(os.cpus().length / 2), Math.max(1, Math.floor(ramGb / 2.5)))); }   // NVENC takes the encode off the CPU → up to 6 parallel sections
         if ((config.render.engine || "native") !== "chrome") log(j, "engine: native (Skia + ffmpeg perspective" + (encoderFor() === "nvenc" ? " + NVENC" : "") + ") — no browser");
         nWorkers = Math.min(nWorkers, todo.length); if (nWorkers > 1) log(j, "rendering " + todo.length + " section(s) with " + nWorkers + " parallel workers");
         var queue = todo.slice(), firstErr = null;
@@ -678,7 +680,7 @@ function tfWatchTick() {
     if (!(config.turboflow && config.turboflow.watch !== false)) return;
     try { listFiles(config.base).forEach(function (ch) { if (/^_/.test(ch)) return; var td = titlesDir(ch); listFiles(td).forEach(function (t) { if (!/^\d+\.\s/.test(t)) return; var tf = path.join(td, t); if (fs.existsSync(tfBatchPath(tf))) tfImport(tf, glog); }); }); } catch (e) {}
 }
-setInterval(tfWatchTick, 6000);
+setInterval(tfWatchTick, 10000);
 /* the upscaler deployment must answer at all before a run spends minutes on it (any HTTP status counts; only a dead host fails) */
 function probeUpscaler(u) {
     return new Promise(function (resolve, reject) {
@@ -743,19 +745,32 @@ function writeLedger(info, s) {
 }
 /* NVENC: the ffmpeg build must list h264_nvenc AND a test encode must succeed (that proves the NVIDIA driver is there) */
 var ENC = { checked: false, nvenc: false, why: "", gpu: "" };
+/* the hardware encoder ladder — a test encode decides, never the GPU name: NVENC (NVIDIA) → Quick Sync (Intel) → AMF (AMD) →
+   VideoToolbox (Apple) → libx264 on the CPU. On a machine with an NVIDIA card nothing changes: NVENC is probed first. */
+var HW_LADDER = process.platform === "darwin"
+    ? [{ id: "videotoolbox", codec: "h264_videotoolbox", args: ["-q:v", "60"], label: "VideoToolbox (Apple)" }, { id: "nvenc", codec: "h264_nvenc", args: ["-preset", "p5", "-cq", "19"], label: "NVENC" }]
+    : [{ id: "nvenc", codec: "h264_nvenc", args: ["-preset", "p5", "-cq", "19"], label: "NVENC" }, { id: "qsv", codec: "h264_qsv", args: ["-global_quality", "19"], label: "Quick Sync (Intel)" }, { id: "amf", codec: "h264_amf", args: ["-quality", "quality"], label: "AMF (AMD)" }];
 function detectEncoder() {
     if (ENC.checked) return Promise.resolve(ENC);
     var cp2 = require("child_process");
     return new Promise(function (resolve) {
-        var r = cp2.spawnSync(config.ffmpeg, ["-hide_banner", "-encoders"], { encoding: "utf8", windowsHide: true });
-        if (r.status !== 0 || !/h264_nvenc/.test(String(r.stdout || ""))) { ENC = { checked: true, nvenc: false, why: "this ffmpeg build has no h264_nvenc" }; return resolve(ENC); }
-        var t = cp2.spawnSync(config.ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:r=30:d=0.5", "-c:v", "h264_nvenc", "-preset", "p5", "-cq", "19", "-f", "null", "-"], { encoding: "utf8", windowsHide: true, timeout: 20000 });
-        if (t.status === 0) { var smi = cp2.spawnSync("nvidia-smi", ["--query-gpu=name,memory.total", "--format=csv,noheader"], { encoding: "utf8", windowsHide: true }); ENC = { checked: true, nvenc: true, why: "", gpu: (smi.status === 0 ? String(smi.stdout || "").trim().split(/\r?\n/)[0] : "NVIDIA GPU") }; }
-        else ENC = { checked: true, nvenc: false, why: "h264_nvenc test encode failed: " + String(t.stderr || "").trim().split(/\r?\n/).pop() };
-        resolve(ENC);
+        var r = cp2.spawnSync(config.ffmpeg, ["-hide_banner", "-encoders"], { encoding: "utf8", windowsHide: true }), list = String(r.stdout || ""), tried = [];
+        if (r.status !== 0) { ENC = { checked: true, nvenc: false, hw: "", why: "ffmpeg -encoders failed" }; return resolve(ENC); }
+        for (var i = 0; i < HW_LADDER.length; i++) {
+            var h = HW_LADDER[i]; if (list.indexOf(h.codec) < 0) { tried.push(h.label + ": not in this ffmpeg build"); continue; }
+            var t = cp2.spawnSync(config.ffmpeg, ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:r=30:d=0.5", "-c:v", h.codec].concat(h.args, ["-f", "null", "-"]), { encoding: "utf8", windowsHide: true, timeout: 30000 });
+            if (t.status === 0) {
+                var gpu = "";
+                if (h.id === "nvenc") { var smi = cp2.spawnSync("nvidia-smi", ["--query-gpu=name,memory.total", "--format=csv,noheader"], { encoding: "utf8", windowsHide: true }); gpu = smi.status === 0 ? String(smi.stdout || "").trim().split(/\r?\n/)[0] : "NVIDIA GPU"; }
+                else gpu = h.label;
+                ENC = { checked: true, nvenc: h.id === "nvenc", hw: h.id, codec: h.codec, gpu: gpu, why: "" }; return resolve(ENC);
+            }
+            tried.push(h.label + ": test encode failed (" + String(t.stderr || "").trim().split(/\r?\n/).pop().slice(0, 80) + ")");
+        }
+        ENC = { checked: true, nvenc: false, hw: "", why: tried.join("; ") || "no hardware encoder" }; resolve(ENC);
     });
 }
-function encoderFor() { var want = config.render.encoder || "auto"; if (want === "x264") return "x264"; if (want === "nvenc") return "nvenc"; return ENC.nvenc ? "nvenc" : "x264"; }
+function encoderFor() { var want = config.render.encoder || "auto"; if (want === "x264") return "x264"; if (["nvenc", "qsv", "amf", "videotoolbox"].indexOf(want) >= 0) return want; return ENC.hw || "x264"; }
 /* ---- the Trello grab (RUVI Studio's Grab stage, one-to-one; whisper from the app-built runtime) ---- */
 var lastScan = null, whisperInfo = { tool: "", plan: null, checkedAt: 0 };
 function whisperOnPath() {
@@ -884,7 +899,7 @@ function checkHealth() {
     health.contact = /[@\/]/.test(String(config.download.contact || ""));
     health.freesound = !!(secretsJson().freesoundKey); health.gemini = !!(secretsJson().geminiKey); health.turboflowDir = fs.existsSync(tfDir());   // Wikimedia User-Agent policy: without a contact the client is capped at 10 requests/minute
     if (fp && (config.ffmpeg === "ffmpeg" || !fs.existsSync(config.ffmpeg))) { config.ffmpeg = fp.ffmpeg; config.ffprobe = fp.ffprobe; FF.configure(config); }
-    if (health.ffmpeg && !ENC.checked) return detectEncoder().then(function () { health.encoder = ENC.nvenc ? ("h264_nvenc · " + ENC.gpu) : ("libx264 (CPU) — " + ENC.why); glog("encoder: " + health.encoder); });
+    if (health.ffmpeg && !ENC.checked) return detectEncoder().then(function () { health.encoder = ENC.hw ? (ENC.codec + " · " + ENC.gpu) : ("libx264 (CPU) — " + ENC.why); glog("encoder: " + health.encoder); });
     return Promise.resolve();
 }
 function provision(reason) {
@@ -898,6 +913,13 @@ function provision(reason) {
     }).catch(function (e) { console.log("provisioning: " + e.message); return checkHealth(); });
 }
 
+var SYS_CACHE = { at: 0, info: null };
+function systemInfo() {
+    if (SYS_CACHE.info && Date.now() - SYS_CACHE.at < 30000) return SYS_CACHE.info;
+    var free = null; try { var st = fs.statfsSync(config.base); free = Math.round(st.bavail * st.bsize / 1073741824); } catch (e) {}
+    var info = { platform: process.platform + " " + os.release() + " " + process.arch, node: process.version, cpus: os.cpus().length, cpu: (os.cpus()[0] || {}).model || "", ramGb: Math.round(os.totalmem() / 1073741824), freeGb: free, encoder: ENC.hw ? ENC.codec + " · " + ENC.gpu : "libx264 (CPU)", workers: (function () { var w = config.render.workers | 0; if (w) return w; var encW = encoderFor(), ramGb = os.totalmem() / 1073741824; return Math.max(1, Math.min(encW === "nvenc" ? 6 : (encW === "x264" ? 3 : 4), Math.floor(os.cpus().length / 2), Math.max(1, Math.floor(ramGb / 2.5)))); })(), scanMs: TITLES_CACHE.ms || 0, synced: /My Drive|Google Drive|OneDrive|Dropbox/i.test(config.base) };
+    SYS_CACHE = { at: Date.now(), info: info }; return info;
+}
 /* ---- the in-app updater: drop a RuviStudio_*_update.zip into updates\ (or the app folder, its parent, or Downloads),
    press UPDATE in the header: the zip is unpacked over the app (a backup of every replaced file goes to runtime\backup\<stamp>\),
    the change is committed and pushed with git when the folder is a repository, and the server restarts itself. ---- */
@@ -972,7 +994,12 @@ function restartSelf(why) {
     glog("restarting — " + why);
     setTimeout(function () {
         try { server.close(); } catch (e) {}
-        try { var child = cp.spawn(process.execPath, [path.join(HERE, "studio.js")].concat(process.argv.slice(2)), { cwd: HERE, detached: true, stdio: "ignore", windowsHide: false }); child.unref(); } catch (e) { glog("restart failed to spawn: " + e.message + " — start the app again by hand"); }
+        try {
+            var args = [path.join(HERE, "studio.js")].concat(process.argv.slice(2)), child;
+            if (process.platform === "win32") { var q = function (x) { return "'" + String(x).replace(/'/g, "''") + "'"; }; child = cp.spawn("powershell.exe", ["-NoProfile", "-WindowStyle", "Hidden", "-Command", "Start-Process -FilePath " + q(process.execPath) + " -ArgumentList " + q(args.map(function (a) { return '"' + a + '"'; }).join(" ")) + " -WorkingDirectory " + q(HERE)], { detached: true, stdio: "ignore", windowsHide: true }); }
+            else { var outFd = fs.openSync(path.join(LOGDIR, "studio-console.log"), "a"); child = cp.spawn(process.execPath, args, { cwd: HERE, detached: true, stdio: ["ignore", outFd, outFd] }); }
+            child.unref();
+        } catch (e) { glog("restart failed to spawn: " + e.message + " — start the app again by hand"); }
         setTimeout(function () { process.exit(0); }, 400);
     }, 600);
 }
@@ -1001,7 +1028,7 @@ var server = http.createServer(function (req, res) {
     if (req.method === "GET" && (p === "/" || p === "/index.html")) { res.writeHead(200, Object.assign({ "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'" }, SEC_HEADERS)); return fs.createReadStream(path.join(HERE, "ui", "index.html")).pipe(res); }
     if (/^\/api\//.test(p)) { var deny = localOnly(req); if (deny) { glog("refused " + req.method + " " + p + " — " + deny); return send(res, 403, { error: "refused: " + deny }); } }
     if (req.method === "OPTIONS") { res.writeHead(204, SEC_HEADERS); return res.end(); }
-    if (req.method === "GET" && p === "/api/state") return send(res, 200, { config: config, health: health, running: running, scan: lastScan, boot: BOOT_TS, version: PKG.version, update: updateCheck(false), jobs: jobs.map(function (j) { var o = Object.assign({}, j); delete o.candidate; o.log = j.log.slice(-3); return o; }) });
+    if (req.method === "GET" && p === "/api/state") return send(res, 200, { config: config, health: health, running: running, scan: lastScan, boot: BOOT_TS, version: PKG.version, update: updateCheck(false), system: systemInfo(), jobs: jobs.map(function (j) { var o = Object.assign({}, j); delete o.candidate; o.log = j.log.slice(-3); return o; }) });
     if (req.method === "GET" && p === "/api/titles") return send(res, 200, { output: { root: "", source: "each title's Output\\ folder" }, titles: allTitles().map(function (t) { var o = Object.assign({}, t); delete o.specials; delete o.bd; o.archived = (config.archived || []).indexOf(t.titleFolder) >= 0; o.sections = t.specials.map(function (s) { return { name: s.name, type: s.type, done: s.done, sec: Math.round((s.t1 - s.t0) / 100) / 10 }; }); return o; }) });
     if (req.method === "GET" && p === "/api/logs") {   // ?after=<seq> returns only the lines logged since that sequence number (the drawer tails every 2 s)
         var qs = new URL(req.url, "http://localhost").searchParams, after = +(qs.get("after") || 0), first = GLOG_SEQ - GLOG.length;   // sequence number of GLOG[0]

@@ -1,4 +1,4 @@
-# Ruvi Studio 3.17 — the whole pipeline on one PC
+# Ruvi Studio 3.18 — the whole pipeline on one PC
 
 One app: **Trello grab → packet zip → (the writing room) → package → stills + AI images → native render → the finished video.** No Adobe apps, no browser. Built from RUVI Conductor Special 2.3 + the Conductor's assembler; prompt-set **r18** (the writing room's docs and toolchain live in `writing-room/` of this repo).
 
@@ -58,6 +58,12 @@ final video (30 / 60 fps) · letterbox (none / 1.85 / 2.00 / 2.20 / 2.39) · mus
 - Logs: per job (log button) and global (`runtime\logs\`).
 - `node studio.js --all` renders every ready title headless.
 
+## 3.18 — runs on any PC (nothing changes on an NVIDIA machine)
+- **Encoder ladder**: `auto` now probes NVENC (NVIDIA) › Quick Sync (Intel) › AMF (AMD) › VideoToolbox (Apple) › x264 by a real test encode and uses the first that works; the hardware quality knob (cq / qp) applies to all of them. A machine with an NVIDIA card still gets NVENC first with the exact same settings as before.
+- **Auto workers** consider RAM as well as cores (NVENC 6, other hardware 4, CPU 3, never more than half the threads or one per 2.5 GB of RAM).
+- Settings → Paths shows **this machine**: platform, Node, threads, RAM, free space on the base drive, encoder, worker count, title-scan time — and warns when the base lives on a synced drive (Google Drive / OneDrive) where metadata comes from the cloud: keep the CHANNELS folder *available offline* for fast scans. The title scan is cached for 4 s and a slow scan is logged with that hint; the TurboFlow watcher ticks every 10 s.
+- Whisper already picked CUDA or CPU automatically (model and threads per machine); the console restart after an update now opens a visible window on Windows and logs to `runtime\logs\studio-console.log` elsewhere; `Ruvi Studio.command` double-clicks on macOS (`chmod +x launch.sh "Ruvi Studio.command"` once after unzipping).
+
 ## 3.17.1 — UI pass (real screenshots, every pane)
 - The log drawer rendered under the header and the pixbar (it lived inside `<main>`'s stacking context) — moved to the page level; now it covers header and pixbar as a drawer should.
 - Three settings cells (Updates, AI images, TurboFlow) sat outside the grid and stretched full width — rebuilt as one grid; a `save all settings` button at the top; wide-cell inputs capped; native selects render dark (`color-scheme: dark`).
@@ -98,6 +104,9 @@ final video (30 / 60 fps) · letterbox (none / 1.85 / 2.00 / 2.20 / 2.39) · mus
 
 ## 3.13
 - Titles → **prompts** button: a panel listing every AI image (001, 002 …) with its section and prompt, the missing ones highlighted, and **copy missing / copy all** buttons that put the prompts on the clipboard one per line, ready to paste into TurboFlow (or `001 | prompt`, or blank-line separated). `POST /api/ai/prompts {titleFolder}` returns the same list.
+
+## Other machines
+Windows: `Ruvi Studio.bat` provisions portable Node, ffmpeg, the renderer package and whisper (CUDA when an NVIDIA card is present, CPU otherwise). macOS / Linux: install Node 18+ and run `./launch.sh` (or double-click `Ruvi Studio.command` on a Mac); ffmpeg and whisper are fetched into `runtime\` the same way; hardware encoding uses Quick Sync, AMF or VideoToolbox when available, x264 otherwise. Everything lives under the base folder you choose in Settings; nothing is tied to a drive letter.
 
 ## This repository
 - The app is the root of the repo (`studio.js`, `lib/`, `ui/`, `assets/`, `launcher/`, `tools/`). Portable Node, ffmpeg, `node_modules\`, the whisper runtime, logs and `studio.config.json` are provisioned on the PC and ignored by git (`.gitignore`).
