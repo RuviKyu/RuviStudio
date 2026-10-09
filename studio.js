@@ -634,9 +634,15 @@ function editPrompt(tf, image, prompt) {
 function tfDir() { return (config.turboflow && config.turboflow.dir) || path.join(os.homedir(), "Downloads", "turboflow"); }
 function tfBatchPath(tf) { return path.join(tf, "Script", "_turboflow_batch.json"); }
 function tfBatchInfo(tf) { var b = readJson(tfBatchPath(tf), null); if (!b || !b.map) return null; var pending = Object.keys(b.map).filter(function (k) { return !b.received || !b.received[k]; }); return { at: b.at, total: Object.keys(b.map).length, received: Object.keys(b.map).length - pending.length, pending: pending, map: b.map, dir: b.dir || tfDir() }; }
+function tfPendingElsewhere(tf) {
+    var hits = [];
+    try { listFiles(config.base).forEach(function (ch) { if (/^_/.test(ch)) return; var td = titlesDir(ch); listFiles(td).forEach(function (t) { if (!/^\d+\.\s/.test(t)) return; var o = path.join(td, t); if (o === tf) return; var b = tfBatchInfo(o); if (b && b.pending.length) hits.push({ title: t, received: b.received, total: b.total }); }); }); } catch (e) {}
+    return hits;
+}
 function tfRecordBatch(tf, images) {
     var items = genItems(tf), stems = items.map(function (x) { return x.stem; }), list = (images || []).map(function (i) { return typeof i === "number" ? ST.aiStem(i) : String(i); }).filter(function (st) { return stems.indexOf(st) >= 0; });
     if (!list.length) return { ok: false, error: "no images in the batch" };
+    var other = tfPendingElsewhere(tf); if (other.length) return { ok: false, error: "TurboFlow numbers every batch from 001, so only one title can wait for its files: \"" + other[0].title + "\" still expects " + (other[0].total - other[0].received) + " — let it finish or press clear in its prompts panel" };
     var map = {}; list.forEach(function (st, k) { map[String(k + 1).padStart(3, "0")] = st; });
     var rec = { at: new Date().toISOString(), dir: tfDir(), map: map, received: {}, note: "TurboFlow numbers the pasted prompts from 001; this map says which AI image each number stands for" };
     try { fs.writeFileSync(tfBatchPath(tf), JSON.stringify(rec, null, 1)); } catch (e) { return { ok: false, error: e.message }; }

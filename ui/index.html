@@ -46,7 +46,9 @@
   .aip-note { color:var(--faint); font-size:11px; margin-top:4px; }
   .chan { display:flex; align-items:center; gap:8px; padding:8px 4px 4px; color:var(--accent); text-transform:uppercase; letter-spacing:1px; font-size:11px; user-select:none; } .chan small { color:var(--faint); text-transform:none; letter-spacing:0; }
   /* ---- the stage strip: what RUN will do for a title (upscale → images → ambience → render → final) ---- */
-  td.p { width:430px; white-space:nowrap; }
+  td.t .name { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.35; }
+  .stages { display:flex; flex-wrap:wrap; align-items:center; gap:3px 0; margin:4px 0 1px 0; }
+  .stages .arr { width:12px; height:12px; margin:0 3px 0 1px; color:var(--line-soft); stroke-width:2.2; flex:none; }
   .stg { display:inline-flex; align-items:center; gap:4px; font-size:10px; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; margin-right:4px; border:1px solid var(--line); color:var(--faint); background:rgba(255,255,255,.015); }
   .stg i { font-style:normal; font-size:11px; width:11px; text-align:center; } .stg b { font-weight:normal; color:inherit; }
   .stg.done { color:var(--good); border-color:rgba(93,255,159,.35); }
@@ -57,6 +59,7 @@
   .stg.skip { color:#555a68; border-color:var(--line); text-decoration:line-through; text-decoration-color:rgba(255,255,255,.25); }
   .stg.failed, .stg.stopped { color:var(--warn); border-color:rgba(255,210,63,.5); }
   .stg .arrow { color:var(--line-soft); margin:0 2px 0 -2px; }
+  .stages .stg { margin-right:0; }
   tr.notready .stg.todo { color:var(--dim); border-color:var(--line-soft); background:none; }
   /* ---- the checklist in a title's detail ---- */
   .plan { display:grid; grid-template-columns:120px 70px 1fr auto; gap:3px 12px; align-items:center; margin:6px 0 8px 0; font-size:11px; }
@@ -206,6 +209,7 @@
 <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></symbol>
 <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
 </svg>
 <header>
   <h1>RUVI STUDIO<span class="cursor">_</span></h1>
@@ -242,7 +246,7 @@
         <div class="tools">
       <button class="tab on" data-f="todo">to do <b id="n-todo"></b></button><button class="tab" data-f="rendered">done <b id="n-rendered"></b></button><button class="tab" data-f="notready">not ready <b id="n-notready"></b></button><button class="tab" data-f="archived">archived <b id="n-archived"></b></button><button class="tab" data-f="all">all <b id="n-all"></b></button>
       <input type="search" id="q" placeholder="search title / channel…  ( / )" /><button class="btn" id="refresh">refresh</button><span id="scan-note" style="color:var(--faint)"></span>
-      <span class="hint" style="margin:0 0 0 auto">stages: <span class="stg todo"><i>○</i>will run</span><span class="stg done"><i>✓</i>done</span><span class="stg blocked"><i>✗</i>blocked</span><span class="stg skip"><i>–</i>not for this channel</span></span>
+      <span class="hint" style="margin:0 0 0 auto">stages: <span class="stg todo"><i>○</i>will run</span> <span class="stg done"><i>✓</i>done</span> <span class="stg blocked"><i>✗</i>blocked</span> <span class="stg pending"><i>·</i>after an earlier stage</span> <span class="stg skip"><i>–</i>not for this channel</span></span>
     </div>
         <div id="titles"><div class="empty">scanning the base folder…</div></div>
       </section>
@@ -364,7 +368,7 @@
     if (job && job.stages && job.stages.length) plan = plan.map(function (x) { var js = job.stages.filter(function (y) { return y.key === x.key; })[0]; return js ? Object.assign({}, x, { state: js.state === "todo" ? "todo" : js.state, have: js.done, need: js.total }) : x; });
     return plan.map(function (x, i) {
       var n = x.need ? (x.state === "todo" && x.key === "upscale" ? (x.need - (x.have || 0)) : (x.have || 0) + "/" + x.need) : "";
-      return (i ? '<span class="arrow">›</span>' : "") + '<span class="stg ' + esc(x.state) + '" title="' + esc(x.label + " — " + (STAGE_HINT[x.state] || x.state) + ": " + x.detail) + '"><i>' + (STAGE_ICON[x.state] || "·") + '</i>' + esc(x.label) + (n !== "" ? ' <b>' + esc(String(n)) + '</b>' : "") + '</span>';
+      return (i ? '<svg class="ic arr"><use href="#i-arrow"/></svg>' : "") + '<span class="stg ' + esc(x.state) + '" title="' + esc(x.label + " — " + (STAGE_HINT[x.state] || x.state) + ": " + x.detail) + '"><i>' + (STAGE_ICON[x.state] || "·") + '</i>' + esc(x.label) + (n !== "" ? ' <b>' + esc(String(n)) + '</b>' : "") + '</span>';
     }).join("");
   }
   function planList(t) {   // the detail's full checklist with the per-stage buttons
@@ -423,8 +427,9 @@
         var blockers = (t.blockers || []), whyText = blockers.length ? blockers.join(" · ") : (s === "notready" ? shortWhy(t) : (t.defaulted ? t.defaulted + " section(s) animated with defaults (no bundle object)" : ""));
         var job = runningJob(t), runLabel = t.final ? "re-run" : ((t.rendered || (t.aiParts && t.aiParts.have)) ? "run rest" : "run"), willRun = (t.willRun || []);
         var runTitle = job ? "already " + job.state : (willRun.length ? "RUN → " + willRun.join(" → ") : (t.final ? "re-run: reuse every part, redo the ambience bed and the final video" : "run"));
-        tr.innerHTML = '<td class="n">' + t.n + '</td><td class="t"><span class="name" title="' + esc(t.title) + (t.subject ? " · " + esc(t.subject) : "") + '">' + esc(t.title) + '</span>' + (whyText ? '<span class="why' + (blockers.length ? " blockline" : "") + '" title="' + esc((t.missing || []).concat(blockers).join(" | ")) + '">' + esc(whyText) + '</span>' : (t.final ? '<span class="why">final ✓ · ' + esc(t.finalPath ? t.finalPath.split(/[\\/]/).slice(-2).join("\\") : "") + '</span>' : "")) + '</td>'
-          + '<td class="p">' + (t.plan && t.plan.length ? stageStrip(t) : (t.packageZip && !t.subject ? '<span class="stg blocked"><i>✗</i>package not unpacked</span>' : '<span class="stg blocked"><i>✗</i>no package</span>')) + '</td>'
+        tr.innerHTML = '<td class="n">' + t.n + '</td><td class="t"><span class="name" title="' + esc(t.title) + (t.subject ? " · " + esc(t.subject) : "") + '">' + esc(t.title) + '</span>'
+          + '<div class="stages">' + (t.plan && t.plan.length ? stageStrip(t) : (t.packageZip && !t.subject ? '<span class="stg blocked"><i>✗</i>package not unpacked</span>' : '<span class="stg blocked"><i>✗</i>no package</span>')) + '</div>'
+          + (whyText ? '<span class="why' + (blockers.length ? " blockline" : "") + '" title="' + esc((t.missing || []).concat(blockers).join(" | ")) + '">' + esc(whyText) + '</span>' : (t.final ? '<span class="why">final ✓ · ' + esc(t.finalPath ? t.finalPath.split(/[\\/]/).slice(-2).join("\\") : "") + '</span>' : "")) + '</td>'
           + '<td class="s"><span class="st ' + s + '">' + (s === "notready" ? "not ready" : s) + '</span></td>'
           + '<td class="a">' + (t.ready ? '<button class="btn acc" data-a="render" title="' + esc(runTitle) + '"' + (job ? " disabled" : "") + '>' + runLabel + '</button> ' : (t.packageZip && !t.subject ? '<button class="btn acc" data-a="unpack">unpack</button> ' : ""))
           + (t.subject ? '<button class="btn' + (t.ai && t.ai.need && t.ai.have < t.ai.need ? " acc" : "") + '" data-a="prompts" title="' + esc(t.ai && t.ai.need ? "AI images " + t.ai.have + "/" + t.ai.need + " — the missing ones with their prompts, copy them for TurboFlow" : "AI prompts") + '">prompts' + (t.ai && t.ai.need && t.ai.have < t.ai.need ? " " + (t.ai.need - t.ai.have) : "") + '</button> ' : "")
@@ -457,7 +462,7 @@
         tr.addEventListener("click", function (e) { var b = e.target.closest("button"), a = b && b.getAttribute("data-a"); if (!a) return; rowAction(a, b); });
         tb.appendChild(tr);
         if (openP[t.titleFolder]) {
-          var pr = document.createElement("tr"); pr.className = "detail"; pr.innerHTML = '<td colspan="5">' + promptsPanel(t) + '</td>';
+          var pr = document.createElement("tr"); pr.className = "detail"; pr.innerHTML = '<td colspan="4">' + promptsPanel(t) + '</td>';
           pr.addEventListener("change", function (e) { if (e.target.getAttribute("data-a") === "pfmt") promptFmt = e.target.value; });
           pr.addEventListener("click", function (e) { var a = e.target.getAttribute("data-a"), r = promptsCache[t.titleFolder]; if (!a) return;
             if (a === "pclose") { openP[t.titleFolder] = false; renderTitles(); }
@@ -473,12 +478,12 @@
             if (a === "ptfclear") api("/api/tf/clear", { titleFolder: t.titleFolder }).then(function () { loadPrompts(t.titleFolder); });
             if (!r || !r.ok) return;
             var pick = a === "pcopyall" ? r.items : a === "pcopymiss" ? r.items.filter(function (x) { return !x.present; }) : a === "pcopy1" ? r.items.filter(function (x) { return String(x.image) === e.target.getAttribute("data-i"); }) : null;
-            if (pick) copyText(promptText(pick)).then(function (ok) { $("scan-note").textContent = ok ? "copied " + pick.length + " prompt(s)" + (a === "pcopy1" ? " (" + pick[0].stem + ")" : "") + " — paste into TurboFlow" : "copy failed — select the text in the file instead"; if (ok && a !== "pcopy1" && promptFmt === "lines") api("/api/tf/batch", { titleFolder: t.titleFolder, images: pick.map(function (x) { return x.stem; }) }).then(function (rb) { if (rb.ok) { $("scan-note").textContent += " · batch of " + rb.total + " recorded: the downloads in " + rb.dir + " will be filed here by number"; loadPrompts(t.titleFolder); } }); }); });
+            if (pick) copyText(promptText(pick)).then(function (ok) { $("scan-note").textContent = ok ? "copied " + pick.length + " prompt(s)" + (a === "pcopy1" ? " (" + pick[0].stem + ")" : "") + " — paste into TurboFlow" : "copy failed — select the text in the file instead"; if (ok && a !== "pcopy1" && promptFmt === "lines") api("/api/tf/batch", { titleFolder: t.titleFolder, images: pick.map(function (x) { return x.stem; }) }).then(function (rb) { if (rb.ok) { $("scan-note").textContent += " · batch of " + rb.total + " recorded: the downloads in " + rb.dir + " will be filed here by number"; loadPrompts(t.titleFolder); } else if (rb.error) $("scan-note").textContent += " · TurboFlow batch NOT recorded: " + rb.error; }); }); });
           tb.appendChild(pr);
         }
         if (openT[t.titleFolder]) {
           var d = document.createElement("tr"); d.className = "detail";
-          d.innerHTML = '<td colspan="5">' + (t.subject ? "subject <b>" + esc(t.subject) + "</b> · " : "") + "channel <b>" + esc(t.channel) + "</b> · final: " + esc(t.finalPath || (t.titleFolder + "\\Output\\")) + (t.sfx ? " · ambience: " + t.sfx.cues + " cue(s), " + t.sfx.files + " sound(s) cached" : "") + (t.ai && t.ai.need ? " · AI images " + t.ai.have + "/" + t.ai.need + (t.upscale ? " (" + t.upscale.painted + " painted, " + t.upscale.raw + " raw)" : "") : "")
+          d.innerHTML = '<td colspan="4">' + (t.subject ? "subject <b>" + esc(t.subject) + "</b> · " : "") + "channel <b>" + esc(t.channel) + "</b> · final: " + esc(t.finalPath || (t.titleFolder + "\\Output\\")) + (t.sfx ? " · ambience: " + t.sfx.cues + " cue(s), " + t.sfx.files + " sound(s) cached" : "") + (t.ai && t.ai.need ? " · AI images " + t.ai.have + "/" + t.ai.need + (t.upscale ? " (" + t.upscale.painted + " painted, " + t.upscale.raw + " raw)" : "") : "")
             + planList(t) + (t.missing && t.missing.length ? '<div style="color:var(--faint)">' + esc(t.missing.join(" · ")) + '</div>' : "")
             + '<div class="secs">' + (t.sections || []).map(function (x) { return '<span class="' + (x.done ? "done" : (x.defaulted ? "def" : "")) + '" title="' + esc(x.type + " · " + x.sec + "s" + (x.defaulted ? " · default animation" : "")) + '">' + esc(x.name) + (x.done ? " ✓" : "") + "</span>"; }).join("") + '</div><button class="btn" data-a="open">open folder</button> <button class="btn" data-a="openscript">open Script\\</button> <button class="btn" data-a="openai">open AI Images\\</button> ' + (t.rendered || t.final ? '<button class="btn" data-a="openout">open output</button>' : "") + '</td>';
           d.addEventListener("click", function (e) { var b = e.target.closest("button"), a = b && b.getAttribute("data-a"); if (a) rowAction(a, b); });
@@ -507,8 +512,10 @@
   }
   var updState = null, restarting = false, bootSeen = null;
   function cmpVer(a, b) { var x = String(a).split(".").map(Number), y = String(b).split(".").map(Number); for (var i = 0; i < 3; i++) { var d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; }
+  var lastUpdKey = "";
   function renderUpdate() {
     var up = state && state.update, b = $("update-btn"); if (!up) return; updState = up; if (bootSeen == null) bootSeen = state.boot;
+    var uk = JSON.stringify(up) + (state && state.running ? "r" : "") + ($("upd-body") ? "" : "x"); if (uk === lastUpdKey) return; lastUpdKey = uk;
     var l = up.latest, busy = !!(state && state.running);
     b.className = "btn" + (l ? " acc" : ""); b.innerHTML = '<svg class="ic"><use href="#i-spark"/></svg> ' + (l ? "update → " + esc(l.version || l.name.replace(/^RuviStudio_|_update\.zip$/g, "")) : "update"); b.disabled = !!(l && busy);
     b.title = l ? (busy ? "an update is ready (" + l.name + ") — let the queue finish first" : "apply " + l.name + (l.version ? " (" + up.current + " → " + l.version + ")" : "") + ": files are backed up, the change is pushed to GitHub, the app restarts") : "no RuviStudio_*_update.zip found — drop one into " + up.dropDir + " (or Downloads); running " + up.current;
