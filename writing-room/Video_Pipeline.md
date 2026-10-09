@@ -1,5 +1,5 @@
 # VIDEO PIPELINE — THE ONE STREAM (run-book)
-PROMPT-SET REVISION 2026-10-06-r18 · Ruvi Studio 3.12 · scripts 2026-10-06-r18 · kit A4-2026-08-03.
+PROMPT-SET REVISION 2026-10-06-r20 · Ruvi Studio 3.13 · scripts 2026-10-06-r20 · kit A4-2026-08-03.
 One chat = one title = one deliverable. The stage docs are the LAW for content (Video_Structure.md,
 Video_Cartographer.md, Video_Stills.md, Video_Sfx.md, Video_Review.md); this file is the ORDER and the
 COMMANDS. Autorun: the packet drop is the instruction; nothing is asked; a message that hits its length
@@ -26,10 +26,13 @@ their embedded extractors; every hash must print OK.) Never retype a script. `R=
 4. RESEARCH: `python3 $R/geo.py "Place, Country" …` for every MAP SUBJECT (and the HOOK's);
    `python3 $R/commons_search.py "…" "…" --maps --min 2000` for sheets, plain for REF / CHAR images —
    several queries per call. Pick ONE file per section by the Structure doc's §4 duties.
-5. WRITE THE FILLS: `<Subject>_fills.txt` in batches via bash heredoc appends — prompts per §6 (detailed,
-   every person dressed for the period and placed in the frame), links, summaries with the PINPOINT, the
-   CHAR cards, the closing blocks. No chat echo of content.
-6. `python3 $R/build_breakdown.py $F` (0 empty slots) → `python3 $R/link_verify.py $F` (0 FAIL; a
+5. WRITE THE STORY BIBLE: `<Subject>_bible.md` (Structure §6.0 — ERA, PLACES at their date, CAST as fixed
+   generic descriptions, FORCES & DRESS, SHIPS & OBJECTS, DO NOT) from the whole narration, in one tool call.
+6. WRITE THE FILLS: `<Subject>_fills.txt` in batches via bash heredoc appends — prompts per §6 written FROM
+   the bible (the real place and the year named in every prompt, the cast reused verbatim, continuity with
+   the neighbouring sections), links, summaries with the PINPOINT, the CHAR cards, the closing blocks. No
+   chat echo of content.
+7. `python3 $R/build_breakdown.py $F` (0 empty slots) → `python3 $R/link_verify.py $F` (0 FAIL; a
    missing or low-res file → swap the link in the fills and rebuild) → `python3 $R/run_all.py $F`
    (preflight · format_lint · prompt_lint · time_breakdown · make_special · subtitles · word_level ·
    make_auto_structure · auto_structure_lint · link_check · download_links · manifest · ai_prompts · zip).
@@ -92,7 +95,7 @@ their embedded extractors; every hash must print OK.) Never retype a script. `R=
 Inside: `<Subject>_breakdown.txt` (timed) · `_special_breakdown.txt` · `_full_timestamp_guidelines.srt` ·
 `_special_timestamp_guidelines.srt` · `_word_level.srt` · `_auto_video_structure.txt/.json` ·
 `_ai_prompts.txt/.csv` · `_allanimations.json` · `_sfx.json` · `_description.txt` · `_download_links.txt`
-(SAVE AS | URL, slot 1, Commons URLs ending ?download) · `_manifest.json` · `_changes.md` · `_source.txt` ·
+(SAVE AS | URL, slot 1, Commons URLs ending ?download) · `_manifest.json` · `_changes.md` · `_source.txt` · `_bible.md` ·
 the reports (format_lint, link_check, timing_check, review_audit). Not inside: the plan, sentences, fills,
 meta, the suffix file, `.selftest/`, `.packet/`. Ruvi Studio reads: breakdown, auto structure, bundle,
 sfx, ai_prompts, description, download_links; the rest serves the Adobe extension and the audit trail.

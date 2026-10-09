@@ -1,5 +1,5 @@
 # VIDEO STRUCTURE — PHASE S (the FULL breakdown)
-PROMPT-SET REVISION 2026-10-06-r18 · pairs with Ruvi Studio 3.12 · scripts bundle 2026-10-06-r18.
+PROMPT-SET REVISION 2026-10-06-r20 · pairs with Ruvi Studio 3.13 · scripts bundle 2026-10-06-r20.
 This document is the LAW for the breakdown's content. The mechanics (sectioning, timing, the template,
 the derived files) are done by the scripts; you write the plan, the links, the cards and the prompts.
 Every "ask the user" of older revisions is VOID (autorun): decide by the rules below and log the decision
@@ -82,7 +82,96 @@ architecture only. Minors dignified, period-accurate. Perpetrators plain and bur
 are GENERIC people — never a real person's likeness (CHAR portraits are period-accurate types). State
 the treatment in the plan's CONTENT TREATMENT line when it applies. format_lint flags violent words.
 
-## 6. PROMPT WRITING — the detailed-prompt law (r18)
+## 6. PROMPT WRITING — the detailed-prompt law (r18, anchored r19, period-locked r20)
+
+### 6.0 First the STORY BIBLE, then any prompt
+Before a single prompt is written, read the WHOLE narration and write `[Subject]_bible.md` (it ships in
+the package; prompt_lint FAILs without it). It is the continuity sheet every prompt is written FROM:
+- `## ERA` — the timeline of the story, year by year (and the decade of each flashback); what that
+  means for dress, ships, weapons, lighting (1718: no naval uniform yet, tricorns, flintlocks, linen and
+  wool; 1890: steel hulls, kerosene lamps, bowler hats).
+- `## PLACES` — every real place the story visits, one bullet each: `- Nassau, New Providence (1717–18)
+  — a pirate camp: palm-thatched huts and canvas tents on sand, a roofless coral-stone fort, sloops in the
+  harbour, no streets, no garrison until Rogers lands in July 1718`. The look of the place AT THAT DATE
+  (climate, vegetation, building materials, what existed and what did not).
+- `## CAST` — every recurring figure as a fixed GENERIC description reused verbatim: `- the captain
+  (Vane, 38 in 1718) — lean, sunburnt, dark unkempt shoulder-length hair, short beard, battered black
+  tricorn, faded blue wool coat with brass buttons over an open linen shirt, cutlass belt`; the crew, the
+  governor, the soldiers, the prisoners. Age them across the timeline.
+- `## FORCES & DRESS` — THE WARDROBE BOARD: one bullet per role the script brings on (common sailor,
+  officer, soldier, townsman, woman, enslaved worker, native people, priest…), each as a fixed phrase
+  reused VERBATIM by every prompt, in this order — head, hair, neck, shirt, outer, legs, feet — using the
+  period's own garment names plus their cut, then "Never: …" with the modern defaults the model would
+  otherwise draw. Example (1718): `common sailor — head: red woollen Monmouth cap or tarred canvas hat;
+  hair tied back in a queue; neck: dark neckerchief; shirt: loose off-white linen; outer: short-waisted
+  blue wool sea jacket with cloth-covered buttons; legs: wide tarred canvas slops to below the knee over
+  grey wool stockings; feet: square-toed buckled shoes or bare. Never: beanies, pea coats, checked shirts,
+  ankle-length trousers, boots.` The real distinctions of that year (Royal Navy officers vs seamen,
+  marines, militia, guarda costa, settlers) are separate bullets. prompt_lint FAILs a thin board.
+- `## SHIPS & OBJECTS` — each vessel by name and type (a single-masted sloop is not a frigate), the
+  documents, flags, weapons and tools the narration names.
+- `## DO NOT` — the anachronisms and generic defaults this story must never show (redcoat town watch
+  in a pirate camp, cobbled streets in the tropics, 19th-century pea jackets and knitted caps on a 1718
+  sailor, Victorian lanterns, modern rigging, named-likeness faces).
+
+### 6.1 Anchor every prompt in the film, never in the sentence alone
+A prompt is written from the BIBLE + the section's own moment. The commonest failure is a sentence
+illustrated in a vacuum: "a proclamation against pirates is posted" becomes a generic 1720s English
+harbour street with a town watch — a scene from no film. Every prompt therefore:
+- NAMES THE PLACE AND THE YEAR inside the prompt ("Nassau harbour, New Providence, July 1718"), so the
+  image model and the viewer get the same place the narration is in. Place and date come from the
+  bible's timeline for that section, not from the sentence's vibe.
+- SHOWS THE STORY'S OWN PEOPLE — the cast entries, reused verbatim (generic, consistent, never a
+  likeness). A "sailor" in a Vane section is a man of Vane's crew as the bible describes them; soldiers
+  exist only where the bible puts them in that year; a crowd is the crowd this place had.
+- KEEPS CONTINUITY — the same ship, the same season and weather as the neighbouring sections of the same
+  day; a character who left the story does not reappear; wounds, cargo, flags carry over.
+- IS THE REAL PLACE, not a type of place: the bible's materials and vegetation, the real harbour's shape,
+  the building that actually stood there (or "no buildings — tents and huts" when that is the truth).
+prompt_lint WARNs on a prompt that names no place from the bible or the breakdown's PLACES block; treat
+it as an error to fix.
+
+### 6.2 Dress that cannot drift modern (r20)
+The image model has no sense of period: it draws the garment WORD. "jacket", "cap", "trousers",
+"shirt", "boots" are drawn as today's jacket, cap, trousers; "knitted cap" is a beanie, "checked shirt" a
+plaid flannel, "pea coat" a 1950s pea coat — even inside a sentence that says 1720s. So every person in
+a prompt is dressed from the WARDROBE BOARD with the period's own names AND the cut, and the prompt
+carries three locks (prompt_lint FAILs without them):
+1. THE ERA TOKEN in the first sentence — a year or decade ("Nassau harbour, July 1718", "a 1720s
+   harbour street"); the model dresses the whole frame from it. CHAR bases too ("a 1720s English captain").
+2. NO MODERN-RENDERING WORDS, ever: beanie, hoodie, sweater, jumper, jeans, denim, t-shirt, sneakers,
+   zipper, wristwatch, sunglasses, baseball cap, bomber, cargo, tracksuit, backpack, rucksack, flannel,
+   plaid, checked shirt, knitted cap, woolly hat, puffer, anorak, windbreaker, raincoat, rubber boots,
+   polo, leggings, pea coat, cardigan, fleece. Say the period garment instead (Monmouth cap, slops,
+   neckerchief, sea jacket, frock coat, cocked hat, gaiters, sabots).
+3. A PERIOD LOCK on the people: at least two distinctive period garments in the sentence that dresses
+   them (breeches, slops, stockings, buckled shoes, tricorne / cocked hat, waistcoat, justaucorps,
+   doublet, Monmouth cap, neckcloth, cloak, petticoat, stays, bodice, puttees, shako, kepi…), or an
+   explicit clause "nothing modern in any garment". An era-ambiguous word (jacket, cap, trousers, shirt,
+   coat, hat, boots) is only ever written with its period cut right before it: "short-waisted sea
+   jacket", "wide canvas slops", "cocked felt hat", "red wool coat with turned-back cuffs".
+WORKED EXAMPLE — the failure: "a sailor … in a blue wool seaman's jacket, a checked linen shirt, wide
+canvas trousers and a knitted cap" rendered a 1950s dockworker in a beanie and a plaid shirt beside two
+correct 1720s soldiers (the soldiers had locks: red coats, tricorns, muskets; the sailor had none).
+The fix, from the board: "a common sailor of the 1720s, foreground left, back half-turned: a man in his
+thirties, weathered face, short beard, hair tied back in a queue, a red woollen Monmouth cap with a
+rolled brim, a loose off-white linen shirt with a dark neckerchief knotted at the throat, a short-waisted
+blue wool sea jacket with cloth-covered buttons, wide tarred canvas slops ending below the knee over grey
+wool stockings, square-toed buckled shoes, a canvas sea bag at his feet … nothing modern in any garment."
+
+Worked example (SCURVY DOGS, Vane at Nassau, the pardon proclamation):
+WRONG — "Medium shot at evening on a harbour street in the 1720s, lantern light from a tavern doorway…
+a sailor… in a blue wool seaman's jacket, a checked linen shirt… knitted cap… two soldiers of the town
+watch in red coats and tricorns…" (generic English port; invented watch; 1800s seaman's dress; no place).
+RIGHT — "Medium shot at dusk in Nassau, New Providence, July 1718: a sandy track between palm-thatched
+huts and canvas tents above the harbour, the roofless coral-stone fort on the rise behind; the King's
+proclamation of pardon nailed to a post outside a driftwood-plank rum shack; in the foreground left a
+pirate of Vane's sloop reads it — barefoot, sunburnt, a loose linen shirt open at the chest, tarred
+canvas breeches cut below the knee, a red headscarf, a cutlass on a leather belt; behind him to the right
+two crewmates in striped jerseys and tarred hats carry a water cask toward the beach; out in the harbour
+the masts of Woodes Rogers' ships at anchor against a deep blue tropical dusk, one lantern glowing in
+the shack doorway, smoke from cooking fires drifting across the sand."
+
 Every section has exactly ONE prompt. AI sections: `PROMPT 1:`; HOOK / MAP / REF / CHAR: one
 `-ALTERNATIVE-` prompt (`PROMPT 1: |CHANNEL ART STYLE|`) — the fallback picture. Each prompt is ONE
 scene, one line, ending with the channel STYLE SUFFIX verbatim (build_breakdown appends it). All
@@ -106,7 +195,9 @@ Rules: concrete and literal (no metaphors, no "swirling vortex of fate", no rune
 no anachronisms); one moment, not a montage; the section's own content, not the whole story; generic
 figures (describe the type, never the historical person by name in an AI prompt); restraint (§5).
 Floors enforced by prompt_lint.py: AI ≥ 90 words before the suffix, -ALTERNATIVE- ≥ 60, CHAR base ≥ 45;
-people without a dress term FAIL; missing placement / light / setting cues WARN.
+people without a dress term FAIL; no story bible (or a thin wardrobe board) FAIL; no era token, a
+modern-rendering garment word, people without a period lock FAIL; missing placement / light / setting
+cues, an era-ambiguous garment without its cut, no bible place WARN.
 
 HOOK / MAP / REF alternative prompts follow the same law (a scene standing in for the real image).
 CHAR prompt base: "Medium-shot portrait, solid black background, subject centered and looking toward the
@@ -115,7 +206,7 @@ they wear (cut, cloth, colour, insignia), how the shoulders turn. The script wri
 suffix. The person's name belongs to the CHARACTER INTRODUCTION line, never to the prompt.
 
 ## 7. Writing the fills (what you type)
-`[Subject]_fills.txt` — blocks `## S<n>` with the keys the section's type needs (see
+First `[Subject]_bible.md` (§6.0), then `[Subject]_fills.txt` — blocks `## S<n>` with the keys the section's type needs (see
 build_breakdown.py's header): HOOK/MAP: MAP SUBJECT, LINK, SUMMARY, PROMPT · REF: LINK, SUMMARY,
 PROMPT · AI: PROMPT · CHAR: CHARACTER, BORN, DIED, ROLE (3–6 sentences grounded in the script),
 REFERENCE, SUMMARY, PROMPT; plus the closing blocks `## CHARACTERS` (one entry per card: `• Name (CHAR n,

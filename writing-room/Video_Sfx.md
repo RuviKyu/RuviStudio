@@ -1,5 +1,5 @@
 # VIDEO SFX — PHASE X (the ambience plan)
-PROMPT-SET REVISION 2026-10-06-r18 · Ruvi Studio 3.12 (lib/sfx.js: target -31 LUFS, ceiling -26, fade in
+PROMPT-SET REVISION 2026-10-06-r20 · Ruvi Studio 3.13 (lib/sfx.js: target -31 LUFS, ceiling -26, fade in
 2 s / out 2.5 s, slices of long files, short sounds once, the bed pauses during the CTAs, a slow ±1.5 dB
 breath so nothing sits flat). No music anywhere.
 

@@ -1,5 +1,5 @@
 # AUTO VIDEO STRUCTURE — PHASE S2 (mechanical since r18)
-PROMPT-SET REVISION 2026-10-06-r18 · Ruvi Studio 3.12.
+PROMPT-SET REVISION 2026-10-06-r20 · Ruvi Studio 3.13.
 `[Subject]_auto_video_structure.txt` (+ the `.json` twin) is the engine-readable cut of the video.
 `run_all.py` makes it (`make_auto_structure.py`) and lints it (`auto_structure_lint.py`); `review_run.py`
 regenerates it after any change. Nothing is written by hand.

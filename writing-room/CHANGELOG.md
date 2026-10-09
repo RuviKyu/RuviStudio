@@ -1,5 +1,15 @@
 # Writing room — prompt-set changelog
 
+## 2026-10-06-r20 (Ruvi Studio 3.13)
+- DRESS THAT CANNOT DRIFT MODERN (Video_Structure.md §6.2): the bible's FORCES & DRESS is a WARDROBE BOARD (role → head, hair, neck, shirt, outer, legs, feet + "Never: …"), reused verbatim; every prompt carries an ERA token in its first sentence, no modern-rendering garment words (beanie, pea coat, checked shirt, knitted cap …) and a PERIOD LOCK (two distinctive period garments or "nothing modern in any garment"); era-ambiguous words only with their period cut. Worked example from a real failure (a 1720s sailor rendered as a 1950s dockworker).
+- prompt_lint: FAIL on a missing era token, a modern-rendering garment, people without a period lock, a bible without a real CAST / FORCES & DRESS / DO NOT; WARN on an era-ambiguous garment word without its cut. Self-test fixture updated.
+
+## 2026-10-06-r19 (Ruvi Studio 3.13)
+- STORY BIBLE before any prompt (`[Subject]_bible.md`: ERA, PLACES at their date, CAST as fixed generic descriptions, FORCES & DRESS, SHIPS & OBJECTS, DO NOT) — Video_Structure.md §6.0; ships in the package.
+- Anchoring law §6.1: every prompt is written from the bible + the section's moment, names the real place and the year, shows the story's own people, keeps continuity. Worked example (the generic "1720s harbour street with a town watch" vs Nassau, July 1718).
+- prompt_lint: FAIL without a bible; WARN on a prompt with no year/decade or no place from the bible / PLACES block.
+- Pipeline step 5 (bible) added; Review doc names the failure pattern.
+
 ## 2026-10-06-r18 (Ruvi Studio 3.12)
 - Docs rewritten against Ruvi Studio 3.12 (native renderer; ambience bed; CTA inserts; one package). 717 KB → 45 KB; every voided "ask the user" removed; one run-book (Video_Pipeline.md) carries the order and the commands.
 - Toolchain as plain files (`scripts/`, `kit/`), synced from GitHub; SHA bundles kept as the fallback (`tools/make_bundle_md.py`).

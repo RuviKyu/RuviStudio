@@ -1,5 +1,5 @@
 RUVI STUDIO — PROJECT INSTRUCTIONS
-PROMPT-SET REVISION 2026-10-06-r18 (Ruvi Studio 3.12 · scripts 2026-10-06-r18 · kit A4-2026-08-03).
+PROMPT-SET REVISION 2026-10-06-r20 (Ruvi Studio 3.13 · scripts 2026-10-06-r20 · kit A4-2026-08-03).
 Knowledge: Video_Pipeline.md (the run-book — ORDER and COMMANDS), Video_Structure.md,
 Video_Cartographer.md, Video_Stills.md, Video_Sfx.md, Video_AutoStructure.md, Video_Review.md (the LAW
 for content), Channel_Prompt_Suffixes.txt, and the toolchain (scripts/*.py, kit/kit.py) synced from the
@@ -30,7 +30,9 @@ THE STREAM (Video_Pipeline.md has the exact commands; R=/home/claude/rr, F=/mnt/
 0 Toolchain: copy scripts + kit.py from /mnt/project into /home/claude/rr (one bash line; never retype code).
 S STRUCTURE: bootstrap.py (packet → folder; derive the SHORT [Subject]: 1–2 words, letters/digits/
   underscores, 3–20 chars — the base of EVERY file) → propose_sections.py → edit the plan (TYPEs, THEME)
-  → geo.py + commons_search.py research → write the fills (prompts, links, cards) → build_breakdown.py →
+  → geo.py + commons_search.py research → write the STORY BIBLE ([Subject]_bible.md: era, places at their
+  date, cast as fixed generic descriptions, forces & dress, ships, do-nots) → write the fills (prompts, links,
+  cards) → build_breakdown.py →
   link_verify.py → run_all.py (timing, special, SRTs, auto structure, lints, manifest, zip).
   Every AI section ≈ 20 s (18–22; 25 ceiling), ONE prompt ending with the STYLE SUFFIX verbatim.
   ONE verified link per section. MAP and REF uncapped, never padded, never consecutive. The HOOK is a map.
@@ -42,11 +44,16 @@ X AMBIENCE: [Subject]_sfx.json by scene run (base + textures, palette words, one
 D DESCRIPTION: [Subject]_description.txt from the channel's template → description_check 0 FAIL.
 R REVIEW: review_run.py → fix in place → 0 MIS-TIMED, 0 FAIL everywhere → present the one zip.
 
-PROMPTS ARE DETAILED AND GROUNDED (Video_Structure.md §6): every prompt is a shot list — framing and
-light, the real place and its materials, EVERY person with features and the exact period dress of that
-time and place, where each one stands in the frame and what they are doing, the surroundings. Literal,
-one moment, generic figures, restraint rules. prompt_lint enforces floors (AI ≥ 90 words before the
-suffix) and dress / placement cues. The suffix file is never edited.
+PROMPTS ARE DETAILED, GROUNDED, ANCHORED AND PERIOD-LOCKED (Video_Structure.md §6): every prompt is
+written FROM the story bible + the section's moment, never from the sentence alone: it names the real
+place and the year in its first sentence, shows the story's own people (the bible's cast, reused
+verbatim, generic, aged to that year), dresses EVERY person from the bible's WARDROBE BOARD with the
+period's own garment names and their cut (never an unqualified jacket / cap / trousers / checked shirt /
+knitted cap — the image model draws those modern), locks the period (two distinctive period garments
+or "nothing modern in any garment"), and places each person in the frame with what they are doing,
+the surroundings and the light. Literal, one moment, restraint rules. prompt_lint enforces the floors
+(AI ≥ 90 words before the suffix), the bible and its wardrobe board, the era token, the modern-word ban
+and the period lock; a FAIL is fixed before run_all continues.
 
 OUTPUT CONTRACT — EXACTLY ONE FILE: [Subject]_package.zip (breakdown, special, SRTs, auto structure,
 ai_prompts, allanimations bundle, sfx plan, description, download_links, manifest, changes, reports).

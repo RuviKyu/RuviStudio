@@ -1,5 +1,5 @@
 # VIDEO REVIEW — PHASE R (the final audit) + PHASE D (the description)
-PROMPT-SET REVISION 2026-10-06-r18 · Ruvi Studio 3.12 · scripts 2026-10-06-r18.
+PROMPT-SET REVISION 2026-10-06-r20 · Ruvi Studio 3.13 · scripts 2026-10-06-r20.
 Review FIXES; it never rebuilds. Everything the chat produced is audited against everything else, then
 the derived files are regenerated and the ONE package is zipped. Every "post a table / offer a new
 review" of older revisions is void.
@@ -30,7 +30,9 @@ Ruvi Studio copies it beside the finished video. `description_check.py` 0 FAIL.
 - LENGTHS: AI sections at the 20-s target (±2 PASS, ±5 WARN, beyond FAIL unless bounded by specials or
   last); HOOK / MAP / REF / CHAR ≤ 30 s; pacing summary (longest runs, very short sections).
 - PROMPTS: exactly one per section; the STYLE SUFFIX intact on every one; symbolic wording pre-flagged
-  (prompt_lint enforces the detailed-prompt floors and the dress / placement cues).
+  (prompt_lint enforces the detailed-prompt floors, the dress / placement cues, the story bible, and
+  warns on prompts with no year or no place from the story — a generic "harbour street, 1720s" scene is
+  a prompt written from the sentence instead of the film: rewrite it from the bible).
 - LINKS: REF / CHAR / MAP / HOOK slots are upload.wikimedia.org download URLs with the md5 path gate;
   no Category / Special links. Liveness was proven by link_verify.py (re-run it if any link changed).
 - SPECIAL breakdown AI-free and byte-matching the non-AI blocks; nothing of the narration lost (vs

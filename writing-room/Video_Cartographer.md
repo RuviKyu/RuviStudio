@@ -1,5 +1,5 @@
 # VIDEO CARTOGRAPHER — PHASE C (map animation data)
-PROMPT-SET REVISION 2026-10-06-r18 · engine: Ruvi Studio 3.12 native map renderer (reads the v6.13 map
+PROMPT-SET REVISION 2026-10-06-r20 · engine: Ruvi Studio 3.13 native map renderer (reads the v6.13 map
 object; pins, ink highlights along a traced shape, dashed routes, auto camera) · kit A4-2026-08-03.
 The sheets are REAL pixels on disk (fetch_assets.py downloads the Commons original); identity is proven
 by sha1 (kit hashmatch); positions are read off gridded native crops and verified on contact sheets.

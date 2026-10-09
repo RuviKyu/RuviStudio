@@ -1,5 +1,5 @@
 # VIDEO STILLS — PHASE C2 (REF + CHAR animation data)
-PROMPT-SET REVISION 2026-10-06-r18 · Ruvi Studio 3.12 native stills engine (stills schema 1.0).
+PROMPT-SET REVISION 2026-10-06-r20 · Ruvi Studio 3.13 native stills engine (stills schema 1.0).
 One `stills` object per REF and per CHAR section, written into `.selftest/stills.json` and merged into
 `[Subject]_allanimations.json` by `bundle.py build` (which fills section, image_width/height,
 comp_start_ms, comp_duration_ms, time_base and validates). You decide only the DESIGN of each shot — from

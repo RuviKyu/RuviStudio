@@ -15,3 +15,6 @@ __pycache__/
 # writing-room scratch (self-test output)
 writing-room/.selftest/
 /tmp/
+# update zips dropped into the app (applied ones too)
+updates/*.zip
+updates/applied/

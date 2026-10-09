@@ -44,7 +44,7 @@ SHEET2 = "https://commons.wikimedia.org/wiki/File:A_chart_of_the_Windward_passag
 PORTRAIT = "https://commons.wikimedia.org/wiki/File:Captain_Charles_Vane_LCCN2007675646.jpg"
 REFIMG = "https://commons.wikimedia.org/wiki/File:Port_Royal_earthquake_1692_by_Jan_Luyken_and_Pieter_van_der_Aa.jpg"
 DRESSED = ("in the foreground on the left a weathered sailor in a loose linen shirt, tarred canvas breeches, a red headscarf and bare feet leans on a cask, beside him a younger crewman "
-           "in a striped jersey and knitted cap coils a rope, in the middle ground to the right the captain in a long faded blue wool coat with brass buttons, a black tricorn and bucket-top boots "
+           "in a striped jersey and a red woollen Monmouth cap coils a rope, in the middle ground to the right the captain in a long faded blue wool coat with brass buttons, a black tricorn and bucket-top boots "
            "stands with one hand on his cutlass hilt, and in the hazy background the masts of anchored ships and a low shoreline of palms and thatched huts fade into warm evening light under a heavy overcast sky, "
            "late-afternoon sun breaking through in one diffused shaft")
 fills = ["## S1", "MAP SUBJECT: Nassau @ 25.0781,-77.3386 [source: script]", "LINK: " + SHEET1,
@@ -53,10 +53,10 @@ fills = ["## S1", "MAP SUBJECT: Nassau @ 25.0781,-77.3386 [source: script]", "LI
 if CH: fills += [f"## S{CH}", "CHARACTER: Charles Vane", "BORN: c. 1680 - England", "DIED: 29 March 1721 - Port Royal, Jamaica (hanged at Gallows Point; about 41)",
                  "ROLE: English pirate captain of the Golden Age, trained under Henry Jennings. Refused Woodes Rogers' pardon at Nassau in 1718 and escaped behind a fireship, raided off Charleston, was deposed by his crew for Calico Jack, wrecked in Honduras and hanged at Port Royal in 1721.",
                  "REFERENCE: " + PORTRAIT, "SUMMARY: Early-18th-century engraved portrait 'Captain Charles Vane' from the General History of the Pyrates (LoC copy), three-quarter length with a burning ship behind him.",
-                 "PROMPT: a weathered English pirate captain in his late thirties, lean sunburnt face, dark unkempt shoulder-length hair under a battered black tricorn hat, a stained blue wool coat with tarnished brass buttons over a loose linen shirt open at the throat, a wide leather belt with a flintlock pistol and cutlass, hard narrowed eyes, a thin scar on the left cheek, square shoulders turned slightly to the right"]
+                 "PROMPT: a 1720s English pirate captain in his late thirties, lean sunburnt face, a white linen neckcloth, dark unkempt shoulder-length hair under a battered black tricorn hat, a stained blue wool coat with tarnished brass buttons over a loose linen shirt open at the throat, a wide leather belt with a flintlock pistol and cutlass, hard narrowed eyes, a thin scar on the left cheek, square shoulders turned slightly to the right"]
 if MP: fills += [f"## S{MP}", "MAP SUBJECT: Windward Passage @ 20.0000,-74.0000 [source: script]", "LINK: " + SHEET2,
                  "SUMMARY: Benjamin Candler's c.1700 'Chart of the Windward Passage including Jamaica, Hispaniola and part of Cuba' (BnF) — the strait the section names. PINPOINT: the open water between the east cape of Cuba (upper left-centre) and the north-west cape of Hispaniola (centre), Jamaica lower left; approx 20.0,-74.0.",
-                 "PROMPT: A pirate sloop running down the Windward Passage at midday under a hard tropical sun, the blue mountains of eastern Cuba on the left horizon and the grey cliffs of Hispaniola on the right: " + DRESSED.replace("evening", "midday")]
+                 "PROMPT: A pirate sloop running down the Windward Passage in 1717 at midday under a hard tropical sun, the blue mountains of eastern Cuba on the left horizon and the grey cliffs of Hispaniola on the right: " + DRESSED.replace("evening", "midday")]
 if RF: fills += [f"## S{RF}", "LINK: " + REFIMG, "SUMMARY: Jan Luyken / Pieter van der Aa engraving of Port Royal, Jamaica, c.1700 — the harbour town on its spit with ships in the roads; the real place the section names.",
                  "PROMPT: Gallows Point at Port Royal at dusk in March 1721 seen from the water, an empty wooden gallows frame on the sandy spit in the foreground right with no one on it: " + DRESSED.replace("evening", "dusk")]
 scenes = ["on the quarterdeck of the sloop at anchor", "in the roofless stone fort above the harbour", "on the crowded beach camp among tents", "aboard a captured merchant brigantine", "in the smoky cabin by lamplight", "on the quay of Charleston harbour", "on the deck of the twelve-gun brigantine", "on the white sand of Green Turtle Cay", "in a small sloop off the Honduras coast", "on the reef island after the storm", "in the courtroom at Spanish Town", "on the Port Royal waterfront", "at the tavern table in Nassau", "beside the ship's wheel in a squall", "at the water barrel on deck", "along the mangrove shore", "in the governor's whitewashed hall", "at the harbour mouth under the fort guns", "on the beach by the burning hull", "under the palms at the camp edge", "at the rail watching the horizon", "in the hold among casks", "on the fort rampart at night", "at the careening beach"]
@@ -69,6 +69,31 @@ fills += ["## CHARACTERS", "• Charles Vane (CHAR 1, Section %s)" % CH, "   Bor
           "## PLACES", "• Nassau, New Providence — the pirate camp and harbour (Sections 1-3).", "• Windward Passage — Vane's hunting ground (Section %s)." % MP, "• Port Royal, Jamaica — trial and execution (Section %s)." % RF,
           "## KEY TERMS", "• King's pardon — the 1718 royal proclamation of amnesty (Section 1).", "• Fireship — a vessel loaded with combustibles set adrift against a fleet."]
 open(os.path.join(F, "Vane_fills.txt"), "w", encoding="utf-8").write("\n".join(fills) + "\n")
+bible = """# Vane — story bible (Video_Structure.md §6.0)
+## ERA
+- 1717–1721, the last years of the Nassau pirate republic: tricorns, flintlock pistols, cutlasses, linen and wool; sloops and brigantines; no naval uniform yet (officers in blue or red civilian coats, seamen in slops).
+## PLACES
+- Nassau, New Providence (1717–18) — a pirate camp: palm-thatched huts and canvas tents on sand, a roofless coral-stone fort, sloops in the harbour; no streets, no garrison until Rogers lands in July 1718.
+- Windward Passage — the strait between the east cape of Cuba and the north-west cape of Hispaniola; blue water, mountainous coasts, trade-wind whitecaps.
+- Charleston — a walled brick-and-timber colonial port behind a sand bar, 1718.
+- Green Turtle Cay, Abacos — low scrub cays and white sand, November 1718.
+- Bay of Honduras — mangrove cays and reefs, hurricane season.
+- Port Royal and Spanish Town, Jamaica — Port Royal a spit of sand with a fort and wharves after the 1692 earthquake; Gallows Point on the spit; Spanish Town a Georgian courthouse square inland.
+## CAST
+- the captain (Vane, about 38 in 1718) — lean, sunburnt, dark unkempt shoulder-length hair, short beard, battered black tricorn, faded blue wool coat with brass buttons over an open linen shirt, cutlass belt.
+- Vane's crew — barefoot sunburnt men in loose linen shirts, tarred canvas breeches, red headscarves or tarred hats, striped jerseys; a dozen to forty men.
+- the quartermaster (Rackham) — slim, clean-shaven, calico striped coat and breeches, no hat.
+- the governor (Rogers) — stout, scarred jaw, brown wig, long red civilian coat, white stockings.
+## FORCES & DRESS
+- common sailor / Vane's crew 1718 — head: red woollen Monmouth cap or tarred canvas hat; hair tied back in a queue; neck: dark neckerchief; shirt: loose off-white linen; outer: short-waisted blue or brown wool sea jacket with cloth-covered buttons (or none in the heat); legs: wide tarred canvas slops to below the knee over grey wool stockings; feet: square-toed buckled shoes or bare. Never: beanies, pea coats, checked shirts, trousers to the ankle, boots.
+- Royal Navy seamen 1718 — as the sailors above, cleaner, with a tarred hat; officers: blue or red civilian frock coats without lace, cocked hats, white stockings, buckled shoes; marines: red wool coats with white facings, white breeches and stockings, cocked hats — only aboard the warships, never a town watch at Nassau.
+- governor's household / merchants — brown wigs, long coats of plain broadcloth, waistcoats, breeches, stockings, buckled shoes; women in linen shifts, stays, petticoats and caps.
+## SHIPS & OBJECTS
+- Vane's sloop (single mast, 6 guns, black flag), the captured French prize used as the fireship, the twelve-gun brigantine taken off Charleston, Rogers' squadron (HMS Milford, Rose, Delicia).
+## DO NOT
+- No redcoat town watch at Nassau, no cobbles or timber-framed streets in the tropics, no pea jackets or knitted caps on Vane's men, no depicted hanging or torture (empty gallows, chains at a distance).
+"""
+open(os.path.join(F, "Vane_bible.md"), "w", encoding="utf-8").write(bible)
 run(os.path.join(S, "build_breakdown.py"), F)
 if not a.offline: run(os.path.join(S, "link_verify.py"), F)
 run(os.path.join(S, "run_all.py"), F)

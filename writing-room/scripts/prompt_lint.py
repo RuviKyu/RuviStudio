@@ -11,7 +11,13 @@ FAIL  · an AI PROMPT 1 under --min words before the suffix (default 90; PROMPT_
       · a leftover placeholder ([FILL], [REWRITE…], TODO, …) · two prompts with the same text
       · a prompt that mentions people but names NO period dress term (the user's rule: every person is
         described — what they wear in that time, their features, where they stand)
-WARN  · a prompt with people but no PLACEMENT cue (foreground/background/left/right/centre/beside…)
+      · no ERA token (a year, a decade "1720s", "18th-century") · a garment the image model renders as modern
+        (beanie, hoodie, jeans, plaid, sneakers, pea coat …) · people without a PERIOD LOCK (two distinctive
+        period garments or a "nothing modern" clause) · the plan without ERA / WARDROBE lines
+      · no story bible ([Subject]_bible.md, Video_Structure.md §6.0) — prompts written from the whole film
+WARN  · no PLACE from the bible / the breakdown's PLACES block (a scene
+        from no film: a generic port, a generic street — rewrite it from the bible)
+      · a prompt with people but no PLACEMENT cue (foreground/background/left/right/centre/beside…)
       · no LIGHT / TIME cue (dawn, dusk, noon, night, lamplight, overcast, moonlight…)
       · no SETTING cue (deck, harbour, street, room, forest, shore…) · symbolic / abstract wording
       · a real person's name inside an AI prompt (figures are generic — the name lives in the narration)
@@ -19,7 +25,7 @@ Writes .selftest/prompt_lint.md. Exit 1 on any FAIL.
 """
 import os, re, sys, glob, argparse
 
-ap = argparse.ArgumentParser(); ap.add_argument("folder"); ap.add_argument("--min", type=int, default=None); ap.add_argument("--alt-min", type=int, default=None); ap.add_argument("--char-min", type=int, default=45); a = ap.parse_args()
+ap = argparse.ArgumentParser(); ap.add_argument("folder"); ap.add_argument("--min", type=int, default=None); ap.add_argument("--alt-min", type=int, default=None); ap.add_argument("--char-min", type=int, default=45); ap.add_argument("--no-bible", action="store_true"); a = ap.parse_args()
 F = a.folder
 def is_bd(p):
     try: return len(re.findall(r"(?m)^SECTION\s+\d+\s*\|", open(p, encoding="utf-8", errors="ignore").read()))
@@ -47,9 +53,40 @@ DRESS = re.compile(r"\b(coat|coats|frock|waistcoat|breeches|trousers|shirt|shirt
 PLACE = re.compile(r"\b(foreground|background|midground|middle ground|left|right|centre|center|beside|behind|in front|ahead|at the (?:bow|stern|rail|helm|edge|far end)|to the (?:left|right)|across|along|facing|turned|silhouetted|framed|leaning|kneeling|standing|seated|sitting|crouch|walking|climbing)\b", re.I)
 LIGHT = re.compile(r"\b(dawn|sunrise|morning|noon|midday|afternoon|dusk|sunset|evening|night|midnight|moonlight|moonlit|starlight|lamplight|candlelight|candle|lantern|lanterns|torchlight|firelight|overcast|grey light|gray light|storm light|sunlight|sun|shadow|shadows|haze|fog|mist|rain|golden hour|twilight|backlit|low light|glow)\b", re.I)
 SETTING = re.compile(r"\b(deck|quarterdeck|hold|cabin|rigging|harbou?r|wharf|quay|dock|beach|shore|cove|reef|bay|sea|ocean|island|jungle|forest|village|town|street|square|market|tavern|inn|church|fort|fortress|wall|walls|gate|courtyard|hall|room|chamber|cell|courtroom|gallows point|road|trail|mountain|valley|river|lake|camp|tent|cove|plantation|field|fields|cliff|cave|ruins?|palace|castle|cathedral|archive|library|ice|snow|tundra|desert|prairie)\b", re.I)
+ERA_TOKEN = re.compile(r"\b(1[3-9]\d\d|20[0-4]\d)s?\b|\b(1[0-9]|20)th[- ]century\b|\b(early|mid|late)[- ](1[3-9]\d\ds|[0-9]{1,2}th century)\b|\bmedieval\b|\bantiquity\b|\bbronze age\b|\biron age\b", re.I)
+MODERN = re.compile(r"\b(beanie|hoodie|hoody|sweatshirt|sweater|jumper|jeans|denim|t-shirt|tee shirt|sneakers|trainers|zipper|zip-up|wristwatch|sunglasses|baseball cap|bomber jacket|cargo pants|tracksuit|backpack|rucksack|flannel|plaid|checked shirt|chequered shirt|gingham|knitted cap|knit cap|woolly hat|wool hat|puffer|anorak|windbreaker|raincoat|rubber boots|wellies|hi-vis|polo shirt|leggings|pea coat|peacoat|cardigan|fleece|nylon|velcro)s?\b", re.I)
+AMBIGUOUS = re.compile(r"\b(jacket|cap|trousers|pants|vest|boots|shirt|coat|hat)\b", re.I)
+PERIOD_QUAL = re.compile(r"\b(1[3-9]\d\ds?|period|century|wool|woollen|linen|canvas|tarred|leather|buckled|knee[- ]length|slops|breeches|frock|justaucorps|waistcoat|doublet|tricorne?|monmouth|thrum|homespun|broadcloth|fustian|hide|fur|sealskin|deerskin|buckskin|short-waisted|sea|cloth-covered|horn|pewter|brass|bucket-top|jackboots|hobnailed|riding|cocked|felt|straw|felted|oilskin)\b", re.I)
+PERIOD_STRONG = re.compile(r"\b(breeches|slops|stockings|buckled|tricorne?|waistcoat|frock coat|justaucorps|doublet|hose|gaiters|cravat|neckcloth|neckerchief|monmouth cap|thrum cap|petticoat|stays|bodice|kerchief|cloak|tunic|toga|chiton|kimono|kaftan|parka|deerskin|buckskin|moccasins|top hat|bowler|crinoline|bustle|corset|breastplate|cuirass|helmet|mail|greaves|puttees|kepi|shako|bicorne|epaulettes?|redingote|pelisse|dolman|sash|queue|periwig|wig|cocked hat|jackboots|bucket-top boots|sabots|clogs|smock|habit|cassock|surcoat|hauberk|gambeson|jerkin|ruff|farthingale|pantaloons|tailcoat|cutaway|frock|bonnet|apron|headscarf|turban|loincloth|sandals)s?\b", re.I)
+LOCK = re.compile(r"\b(no modern|nothing modern|period[- ](correct|accurate)|of the period|historically accurate)\b", re.I)
 SYMBOLIC = re.compile(r"\b(vortex|tendrils? of|echoes of|shadow of (?:empire|fate|history)|destiny|swirling|ethereal|otherworldly|surreal|cosmic|mystical energy|glowing runes|floating|impossible)\b", re.I)
 PLACEHOLDER = re.compile(r"\[(FILL|REWRITE|TODO|TBD)|\bTODO\b|\bTBD\b|lorem ipsum", re.I)
 fails, warns, rows, seen = [], [], [], {}
+# the story bible (§6.0) and the places it names; the breakdown's PLACES block is the second source
+bible = glob.glob(os.path.join(F, "*_bible.md")); places = set()
+if bible:
+    bt = open(bible[0], encoding="utf-8", errors="ignore").read()
+    if len(bt) < 600: fails.append("story bible is too thin (< 600 chars) — ERA, PLACES, CAST, FORCES & DRESS, SHIPS & OBJECTS, DO NOT")
+    for sec_name, floor_chars in (("CAST", 200), ("FORCES & DRESS", 300), ("DO NOT", 80)):
+        ms = re.search(r"(?ims)^##\s*" + re.escape(sec_name) + r"\s*$(.*?)(?=^##\s|\Z)", bt)
+        if not ms or len(ms.group(1).strip()) < floor_chars: fails.append(f"story bible: '## {sec_name}' missing or too thin — the WARDROBE BOARD lives there (role → head, hair, neck, shirt, outer, legs, feet; and what is never worn)")
+    if MODERN.search(bt) and not re.search(r"(?ims)^##\s*DO NOT", bt[:bt.find(MODERN.search(bt).group(0))] if MODERN.search(bt) else ""):
+        warns.append("story bible: a modern-rendering garment word (" + MODERN.search(bt).group(0) + ") appears outside DO NOT — the model will draw it modern; name the period garment instead (Monmouth cap, slops, sea jacket)")
+    sec = re.search(r"(?ims)^##\s*PLACES\s*$(.*?)(?=^##\s|\Z)", bt)
+    for ln in (sec.group(1) if sec else "").split("\n"):
+        m = re.match(r"^\s*[-•*]\s*([^—:(\n]{3,60})", ln)
+        if m: places.add(m.group(1).strip().rstrip(",").lower())
+elif not a.no_bible: fails.append("no [Subject]_bible.md — write the story bible before the prompts (Video_Structure.md §6.0)")
+pb = re.search(r"(?s)^=+\nPLACES\n=+\n(.*?)(?=\n=+\n|\Z)", text, re.M)
+for ln in (pb.group(1) if pb else "").split("\n"):
+    m = re.match(r"^\s*•\s*([^—:(\n]{3,60})", ln)
+    if m: places.add(m.group(1).strip().rstrip(",").lower())
+place_words = set()
+for pl in places:
+    for part in re.split(r"[,/]| and ", pl):
+        part = part.strip()
+        if len(part) >= 4: place_words.add(part)
+YEAR = re.compile(r"\b(1[0-9]\d\d|20[0-2]\d)s?\b|\b(1st|2nd|3rd|[4-9]th|1\dth|20th|21st)[- ]century\b|\b(BC|AD)\b")
 lines = text.split("\n"); heads = [i for i, l in enumerate(lines) if HDR.match(l)]
 char_names = re.findall(r"(?m)^CHARACTER INTRODUCTION:\s*(.+?)\s*$", text)
 for k, hi in enumerate(heads):
@@ -72,10 +109,19 @@ for k, hi in enumerate(heads):
     seen.setdefault(key, tag)
     has_people = bool(PEOPLE.search(base))
     if has_people and not DRESS.search(base): fails.append(f"{tag}: people appear but no period dress is described (coat, breeches, tricorn, linen shirt, boots, headscarf…)")
+    if not ERA_TOKEN.search(base): fails.append(f"{tag}: no ERA token — name the decade or year in the first sentence ('in Nassau in July 1718', 'a 1720s harbour street'); the image model dresses the scene from it")
+    mm = MODERN.search(base)
+    if mm: fails.append(f"{tag}: '{mm.group(0)}' — a garment the image model renders as modern; use the period garment from the WARDROBE board instead")
+    if has_people and len(set(m.group(0).lower() for m in PERIOD_STRONG.finditer(base))) < 2 and not LOCK.search(base):
+        fails.append(f"{tag}: people without a PERIOD LOCK — give at least two distinctive period garments (breeches, slops, stockings, buckled shoes, tricorne, waistcoat, Monmouth cap, neckerchief, cloak, doublet…) or an explicit 'nothing modern' clause")
+    for am in AMBIGUOUS.finditer(base):
+        before = base[max(0, am.start() - 60):am.start()]
+        if not PERIOD_QUAL.search(before) and not re.search(r"\b(red|blue|white|scarlet)\s+$", before): warns.append(f"{tag}: '{am.group(0)}' is era-ambiguous — add the period cut right before it (short-waisted sea jacket, wide canvas slops, cocked felt hat, red wool coat with turned-back cuffs)")
     if has_people and not PLACE.search(base): warns.append(f"{tag}: no placement cue for the people (foreground / background / left / right / beside / behind)")
     if ty != "CHAR" and not LIGHT.search(base): warns.append(f"{tag}: no light / time-of-day cue")
     if ty != "CHAR" and not SETTING.search(base): warns.append(f"{tag}: no concrete setting word")
     if SYMBOLIC.search(base): warns.append(f"{tag}: symbolic / abstract wording — show the literal thing being narrated")
+    if ty != "CHAR" and place_words and not any(pw in base.lower() for pw in place_words): warns.append(f"{tag}: names no place from the story (bible / PLACES) — a generic setting is a prompt written from the sentence, not the film")
     for nm in char_names:
         sn = nm.split()[-1]
         if ty == "AI" and len(sn) > 3 and re.search(r"\b" + re.escape(sn) + r"\b", base): warns.append(f"{tag}: names {nm} inside an AI prompt — figures stay generic (describe the type, not the person)")

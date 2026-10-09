@@ -14,11 +14,11 @@
    Run:  node special.js       then open  http://localhost:4713
    ========================================================================== */
 "use strict";
-var http = require("http"), fs = require("fs"), path = require("path"), url = require("url"), os = require("os"), cp = require("child_process");
+var http = require("http"), fs = require("fs"), path = require("path"), os = require("os"), cp = require("child_process");
 var HERE = __dirname, CFG_FILE = path.join(HERE, "studio.config.json");
 var ST = require("./lib/structure.js"), FF = require("./lib/ffmpeg.js"), CAP = require("./lib/render/capture.js"), UZ = require("./lib/unzip.js"), D = require("./lib/studio/packetdl.js"), PV = require("./lib/provision.js"), NAV = require("./lib/studio/navdl.js");
 var G = require("./lib/studio/stages/grab.js"), PK = require("./lib/studio/packet.js");   // the Adobe extension's Trello grab, vendored
-var AS = require("./lib/assemble.js"), SFX = require("./lib/sfx.js"), ZIP = require("./lib/zipw.js"), UP = require("./lib/upscaler.js");
+var AS = require("./lib/assemble.js"), SFX = require("./lib/sfx.js"), ZIP = require("./lib/zipw.js"), UP = require("./lib/upscaler.js"), IG = require("./lib/imagegen.js");
 
 process.on("unhandledRejection", function (e) { try { glog("unhandled rejection: " + (e && e.stack || e)); } catch (e2) {} });
 process.on("uncaughtException", function (e) { try { glog("uncaught exception: " + (e && e.stack || e)); } catch (e2) {} });
@@ -36,11 +36,13 @@ var DEFAULT_CFG = {
               engine: "native",                                       // native = Skia + ffmpeg perspective (no browser, ~10-20x faster) · chrome = the headless-Chrome renderer
               tableLean: 17, perspective: 2200, hlStyle: "ink",        // the sheet's lean back on the table (°), the camera's perspective distance, the highlight style (ink | glow)
               macro: "normal",                                        // macro-lens finish on maps: off | light | normal | strong (soft edges, softer corners, light vignette)
-              letterbox: 2.0, voDb: 0, zoom: 1.22, zoomDrift: 0.06, keepParts: true, sfxLufs: -31, sfxDuckDb: 2.5 },   // AI pan: zoom 1.22 = room to move; ambience bed at -31 LUFS (clearly there, well under the voice), 2.5 dB duck under the voice   // keepParts: keep Output\parts\ (the rendered sections) so a re-run only redoes what changed; false = delete it after the final video   // final video: letterbox ratio (2.0 = 60 px bars; 2.39 = 138 px), music/voice levels, AI Ken Burns zoom                 // a section whose still has no bundle object: "defaults" = plain map framing / REF pull-out; "skip" = not ready
+              letterbox: 2.0, voDb: 0, zoom: 1.22, zoomDrift: 0.06, keepParts: true, sfxLufs: -31, sfxUnderVoiceDb: 26, sfxDuckDb: 2.5 },   // sfxUnderVoiceDb: the bed sits 26 dB under the measured voice (barely there)   // AI pan: zoom 1.22 = room to move; ambience bed at -31 LUFS (clearly there, well under the voice), 2.5 dB duck under the voice   // keepParts: keep Output\parts\ (the rendered sections) so a re-run only redoes what changed; false = delete it after the final video   // final video: letterbox ratio (2.0 = 60 px bars; 2.39 = 138 px), music/voice levels, AI Ken Burns zoom                 // a section whose still has no bundle object: "defaults" = plain map framing / REF pull-out; "skip" = not ready
     download: { pace: "auto", contact: "", imgNaming: "typenum", hookOriginal: true },
     grab: { whisperModel: "", whisperDevice: "", autoInstallWhisper: true, prefetchModel: true, chatUrl: "", batched: true, batchSize: 16, computeType: "float16", shareRuntime: true, looseFiles: false },   // looseFiles false = Script\ keeps only packet.zip + the VO .mp3; shareRuntime = junction <base>\_RUNTIME\python → the app's whisper runtime for the Adobe extension   // max-speed CUDA: batched inference (16 windows per pass) in float16   // the Trello grab (RUVI Studio's stage): whisper model/device blank = the Studio's own plan (GPU + CUDA libs → distil-large-v3)   // the Navigate tab's engine one-to-one: auto pace (fast → human cadence after a 429), MAP originals / others at 3840, persistent rounds, walls, manifest. hookOriginal: the HOOK is a map now — fetch its sheet as an original like MAP (the one deliberate deviation; off = exactly 1.6.7)
     upgradeLowRes: false,                                    // (kept for the older path; the Navigate engine decides sizes itself)
     upscaler: { url: "https://comfy-oil-upscaler.vercel.app", prompt: "", parallel: 10, keepRaw: true, suffix: "_painted", channels: { BILGERATS: true, SCURVYDOGS: true, OLDWORLDPROOF: false }, workflow: null },   // channels: which channels' AI images get painted; workflow: ComfyUI node parameters edited in the UPSCALER tab (null = the bundled workflow)   // Ruvi's Batch Oil Upscaler (Vercel → RunPod): the deployment URL; originals are kept in AI Images\_raw\
+    imagegen: { enabled: true, model: "gemini-3-pro-image-preview", imageSize: "2K", aspectRatio: "16:9", parallel: 2, retries: 4, channels: {} },   // the AI images from Google's official Gemini API (key: _SECRETS\secrets.json "geminiKey"); channels: {NAME:false} switches a channel off
+    turboflow: { dir: "", watch: true },                     // the TurboFlow bridge: the extension's download folder (blank = <home>\Downloads\turboflow); numbered files are filed into the title's AI Images\ by the batch the prompts panel recorded
     archived: [],                                            // title folders set aside by hand (archive button): they leave the to-do list and "run all" never picks them
     cta: { enabled: true, positions: [0.2, 0.5], byChannel: {} }   // CTA inserts: <CHANNEL>\CTA\* in name order, CTA n at positions[n-1] of the narration (a channel key in byChannel overrides, e.g. {"OLDWORLDPROOF": [0.25, 0.6]}); a channel with no CTA folder/files gets none
 };
@@ -172,7 +174,21 @@ function unpackPackage(tf) {
     files.filter(function (f) { return /_all(animations|maps)\.json$/i.test(f); }).forEach(function (f) { try { fs.copyFileSync(path.join(sc, path.basename(f)), path.join(maps, path.basename(f))); } catch (e) {} });
     return { ok: true, files: files.length, zip: zip };
 }
-function open(t) { try { if (process.platform === "win32") cp.spawn("cmd", ["/c", "start", "", t], { detached: true, stdio: "ignore" }).unref(); else cp.spawn(process.platform === "darwin" ? "open" : "xdg-open", [t], { detached: true, stdio: "ignore" }).unref(); } catch (e) {} }
+function open(t) {
+    try {
+        var isDir = false; try { isDir = fs.statSync(t).isDirectory(); } catch (e) {}
+        if (process.platform === "win32") cp.spawn(isDir ? "explorer.exe" : "rundll32.exe", isDir ? [t] : ["url.dll,FileProtocolHandler", t], { detached: true, stdio: "ignore", windowsHide: true }).unref();   // no cmd.exe in between: & ^ | in a title name are just characters
+        else cp.spawn(process.platform === "darwin" ? "open" : "xdg-open", [t], { detached: true, stdio: "ignore" }).unref();
+    } catch (e) {}
+}
+/* /api/open may only open what the UI shows: folders and plain files under the base folder or the app's runtime\ (never an executable) */
+var OPEN_EXT = /\.(txt|md|json|csv|srt|log|mp4|mov|mkv|m4v|mp3|wav|ogg|jpe?g|png|webp|pdf|docx|zip)$/i;
+function openAllowed(t) {
+    if (!t || typeof t !== "string") return false;
+    var abs = path.resolve(t), roots = [path.resolve(config.base), path.resolve(HERE, "runtime"), path.resolve(HERE, "updates"), path.resolve(tfDir())], inside = roots.some(function (r) { var a = process.platform === "win32" ? abs.toLowerCase() : abs, b = process.platform === "win32" ? r.toLowerCase() : r; return a === b || a.indexOf(b + path.sep) === 0; });
+    if (!inside) return false;
+    try { var st = fs.statSync(abs); return st.isDirectory() || (st.isFile() && OPEN_EXT.test(abs)); } catch (e) { return false; }
+}
 
 /* ---- a title: what it has, what it needs ---------------------------------- */
 function inspect(tf, channel, n, titleName) {
@@ -220,8 +236,8 @@ function inspect(tf, channel, n, titleName) {
         if (missAi.length) info.missing.push("AI images: " + haveAi + "/" + aiItems.length + " in AI Images\\ (missing " + missAi.slice(0, 5).join(", ") + (missAi.length > 5 ? "…" : "") + ") — generate them from " + info.subject + "_ai_prompts.txt");
     } catch (e3) { info.missing.push("auto structure unreadable: " + e3.message); } }
     var sfxName = names.filter(function (x) { return /_sfx\.json$/i.test(x); })[0], sd = sfxDir(channel), sds = sfxDirs(channel);
-    info.sfx = { cues: 0, have: 0, files: Object.keys(SFX.quickIndexes(sds).files).length, missing: [] };
-    if (sfxName) { var sj = readJson(path.join(sc, sfxName), null); if (sj && sj.cues) { var ixq = SFX.quickIndexes(sds), seen = {};
+    info.sfx = { cues: 0, have: 0, files: Object.keys(qix(sds).files).length, missing: [] };
+    if (sfxName) { var sj = readJson(path.join(sc, sfxName), null); if (sj && sj.cues) { var ixq = qix(sds), seen = {};
         sj.cues.forEach(function (c) { var key = String(c.sound || "").toLowerCase(); if (seen[key]) return; seen[key] = 1; info.sfx.cues++; var w = SFX.words(c.sound); var hit = (c.file && ixq.files[c.file]) || SFX.localMatch(sd, ixq, w, 45) || SFX.localMatch(sd, ixq, w, 3); if (hit) info.sfx.have++; else info.sfx.missing.push(c.sound); }); } }
     if (info.sfx.missing.length) info.notes = (info.notes || []).concat(["ambience to fetch at run: " + info.sfx.missing.length + " sound(s) (" + info.sfx.missing.slice(0, 3).join(", ") + (info.sfx.missing.length > 3 ? "…" : "") + ") — the sfx button fetches them now"]);
     info.finalPath = path.join(tf, "Output", sanitize(path.basename(tf)) + ".mp4");
@@ -232,7 +248,59 @@ function inspect(tf, channel, n, titleName) {
     info.ready = info.missing.every(function (m) { return /downloaded automatically/.test(m); });
     info.finished = info.final;
     if (!bd.sections.some(function (s) { return s.type !== "AI" && s.link; }) && !info.images.linksFile && noStill.length) { info.missing.push("no download links (neither _download_links.txt nor section links in the breakdown)"); info.ready = false; }
+    // the AI parts (one per AI item, recipe-matched like renderParts does) — so the render stage counts every part, not only the specials
+    info.aiParts = { have: 0, need: 0 };
+    if (autoName && info.ai && info.ai.need) { try { var tR = ST.readTitle(tf); if (tR && tR.auto) { var workP = path.join(tf, ST.PARTS), cfgP = Object.assign({}, AS.DEF, config.render, { encoder: encoderFor() });
+        tR.auto.items.forEach(function (it) { if (it.kind !== "AI") return; info.aiParts.need++; var a = ST.assetsFor(tf, it, tR.bd); if (!a.image) return; it._asset = a; var outP = AS.segName(workP, it), oldP = ""; try { oldP = fs.readFileSync(outP + ".json", "utf8"); } catch (e) {} if (fs.existsSync(outP) && oldP === AS.recipe(it, cfgP)) info.aiParts.have++; }); } } catch (eP) {} }
+    buildPlan(info, channel);
     return info;
+}
+/* THE CHECKLIST — what RUN will do for this title, stage by stage (the UI shows it on every row and in the detail):
+     upscale (painted channels only) → images (section stills) → ambience → render (every part) → final (the whole video)
+   state: done · todo (will run) · running · skip (not for this channel / nothing to do) · blocked (RUN refuses until fixed) */
+function paintedChannel(channel) { var m = config.upscaler && config.upscaler.channels; return !(m && m[chanFolder(channel)] === false); }
+function genChannel(channel) { var c = config.imagegen || {}; return c.enabled !== false && !(c.channels && c.channels[chanFolder(channel)] === false); }
+function genState(tf) { return readJson(path.join(tf, "Script", "_imagegen.json"), { images: {} }); }
+function saveGenState(tf, st) { try { fs.writeFileSync(path.join(tf, "Script", "_imagegen.json"), JSON.stringify(st, null, 1)); } catch (e) {} }
+function buildPlan(info, channel) {
+    var plan = [], chOn = paintedChannel(channel), up = info.upscale || { raw: 0, painted: 0 }, urlOk = /^https?:\/\//.test(String((config.upscaler || {}).url || ""));
+    var aiNeed = info.ai ? info.ai.need : 0, aiMiss = (info.ai && info.ai.missing) ? info.ai.missing.length : 0, genOn = genChannel(channel), hasKey = !!secretsJson().geminiKey, genCan = false;
+    var gst = aiMiss ? genState(info.titleFolder) : { images: {} }, blockedStems = aiMiss ? info.ai.missing.filter(function (st) { return gst.images[st] && gst.images[st].blocked; }) : [], tfb = aiMiss ? tfBatchInfo(info.titleFolder) : null;
+    if (!aiNeed) plan.push({ key: "generate", label: "generate", state: "skip", detail: "no AI sections" });
+    else if (!aiMiss) plan.push({ key: "generate", label: "generate", state: "done", detail: aiNeed + " AI image(s) in AI Images\\", have: aiNeed, need: aiNeed });
+    else if (genOn && hasKey && blockedStems.length === aiMiss) plan.push({ key: "generate", label: "generate", state: "blocked", detail: blockedStems.length + " prompt(s) blocked by Gemini's safety filter (" + blockedStems.slice(0, 4).join(", ") + (blockedStems.length > 4 ? "…" : "") + ") — edit them in the prompts panel", have: aiNeed - aiMiss, need: aiNeed });
+    else if (genOn && hasKey) { genCan = true; plan.push({ key: "generate", label: "generate", state: "todo", detail: (aiMiss - blockedStems.length) + " image(s) to generate with " + (config.imagegen.model || IG.KNOWN_MODELS[0].id) + (blockedStems.length ? " (" + blockedStems.length + " blocked prompt(s) need editing)" : "") + (tfb && tfb.pending.length ? " · TurboFlow batch " + tfb.received + "/" + tfb.total + " received" : ""), have: aiNeed - aiMiss, need: aiNeed }); }
+    else plan.push({ key: "generate", label: "generate", state: "blocked", detail: aiMiss + " AI image(s) missing — " + (tfb && tfb.pending.length ? "TurboFlow batch " + tfb.received + "/" + tfb.total + " received; " : "") + (genOn ? "add \"geminiKey\" to _SECRETS\\secrets.json for automatic generation, or " : "") + "generate them with the prompts panel (copy for TurboFlow → files land in AI Images\\ by themselves)", have: aiNeed - aiMiss, need: aiNeed });
+    var aiBlocksRender = aiMiss && !genCan;
+    if (!chOn) plan.push({ key: "upscale", label: "upscale", state: "skip", detail: "AI images are not painted on " + channel + " (Settings → upscaler → channels)" });
+    else if (!aiNeed) plan.push({ key: "upscale", label: "upscale", state: "skip", detail: "no AI sections" });
+    else if (!up.raw && up.painted) plan.push({ key: "upscale", label: "upscale", state: "done", detail: up.painted + " painted" + (aiMiss ? " · " + aiMiss + " image(s) still missing" : ""), have: up.painted, need: up.painted });
+    else if (!up.raw) plan.push({ key: "upscale", label: "upscale", state: "todo", detail: "no AI images in AI Images\\ yet", have: 0, need: aiNeed });
+    else if (!urlOk) plan.push({ key: "upscale", label: "upscale", state: "blocked", detail: up.raw + " raw image(s) and no upscaler URL — set it in Settings → upscaler, or untick " + channel + " there", have: up.painted, need: up.painted + up.raw });
+    else plan.push({ key: "upscale", label: "upscale", state: "todo", detail: up.raw + " raw image(s) → painted (" + up.painted + " already painted)", have: up.painted, need: up.painted + up.raw });
+    var im = info.images || { have: 0, need: 0 }, noLinks = (info.missing || []).some(function (m) { return /^no download links/.test(m); });
+    if (!im.need) plan.push({ key: "images", label: "images", state: "skip", detail: "no HOOK / MAP / REF / CHAR sections" });
+    else if (im.have >= im.need) plan.push({ key: "images", label: "images", state: "done", detail: im.need + " section still(s) on disk", have: im.have, need: im.need });
+    else if (noLinks) plan.push({ key: "images", label: "images", state: "blocked", detail: (im.need - im.have) + " still(s) missing and no links to fetch them", have: im.have, need: im.need });
+    else plan.push({ key: "images", label: "images", state: "todo", detail: (im.need - im.have) + " still(s) to fetch from Wikimedia", have: im.have, need: im.need });
+    var sf = info.sfx || { cues: 0, have: 0, missing: [] };
+    if (!sf.cues) plan.push({ key: "ambience", label: "ambience", state: "skip", detail: "no ambience cues in the package (silent bed)" });
+    else if (!sf.missing.length) plan.push({ key: "ambience", label: "ambience", state: "done", detail: sf.cues + " sound(s) cached", have: sf.have, need: sf.cues });
+    else plan.push({ key: "ambience", label: "ambience", state: "todo", detail: sf.missing.length + " sound(s) to fetch" + (secretsJson().freesoundKey ? "" : " (no Freesound key — cached + bundled sounds only)"), have: sf.have, need: sf.cues });
+    var partsHave = (info.rendered || 0) + ((info.aiParts || {}).have || 0), partsNeed = (info.total || 0) + ((info.aiParts || {}).need || 0);
+    var hard = (info.missing || []).filter(function (m) { return !/downloaded automatically/.test(m) && !/^AI images:/.test(m) && !/^no download links/.test(m); });
+    if (hard.length) plan.push({ key: "render", label: "render", state: "blocked", detail: hard[0], have: partsHave, need: partsNeed });
+    else if (aiBlocksRender) plan.push({ key: "render", label: "render", state: "pending", detail: "after the AI images", have: partsHave, need: partsNeed });
+    else if (partsNeed && partsHave >= partsNeed) plan.push({ key: "render", label: "render", state: "done", detail: partsNeed + " part(s) rendered", have: partsHave, need: partsNeed });
+    else plan.push({ key: "render", label: "render", state: "todo", detail: (partsNeed - partsHave) + " of " + partsNeed + " part(s) to render" + (chOn && up.raw ? " (after the upscale: painted images re-render their parts)" : ""), have: partsHave, need: partsNeed });
+    if (hard.length || aiBlocksRender) plan.push({ key: "final", label: "final", state: "pending", detail: "after the render" });
+    else if (info.final) plan.push({ key: "final", label: "final", state: "done", detail: "Output\\" + path.basename(info.finalPath || "") });
+    else plan.push({ key: "final", label: "final", state: "todo", detail: "assemble the whole video (fades, CTAs, letterbox, voice + ambience)" });
+    info.plan = plan; info.blockers = plan.filter(function (x) { return x.state === "blocked"; }).map(function (x) { return x.label + ": " + x.detail; });
+    info.willRun = plan.filter(function (x) { return x.state === "todo"; }).map(function (x) { return x.key; });
+    // READY = RUN can start: nothing blocked, and no missing piece other than what RUN fetches / generates itself
+    var hardOther = (info.missing || []).filter(function (m) { return !/downloaded automatically/.test(m) && !/^AI images:/.test(m) && !/^no download links/.test(m); });
+    info.ready = !info.blockers.length && !hardOther.length && !!info.subject;
 }
 function outBaseFor(tf, channel, titleName) { var eo = effectiveOutput(); if (!eo.root) return tf; return path.join(eo.root, channel, eo.titlesSub || "", path.basename(tf)); }
 var NAMINGS = ["name", "typenum", "num"];
@@ -247,8 +315,16 @@ function existingRender(outBase, s) {
     return "";
 }
 function titlesDir(ch) { var cd = path.join(config.base, ch), td = path.join(cd, TITLES); return fs.existsSync(td) ? td : cd; }
+var TITLES_CACHE = { at: 0, list: null, ttl: 1500 };
+function invalidateTitles() { TITLES_CACHE.at = 0; TITLES_CACHE.list = null; }
 function allTitles() {
-    var out = [];
+    if (TITLES_CACHE.list && Date.now() - TITLES_CACHE.at < TITLES_CACHE.ttl) return TITLES_CACHE.list;
+    var out = allTitlesScan(); TITLES_CACHE.list = out; TITLES_CACHE.at = Date.now(); return out;
+}
+var QIX = {};
+function qix(dirs) { var k = dirs.join("|"); if (!QIX[k]) QIX[k] = SFX.quickIndexes(dirs); return QIX[k]; }
+function allTitlesScan() {
+    QIX = {}; var out = [];
     listFiles(config.base).forEach(function (ch) {
         if (/^_/.test(ch)) return; var cd = path.join(config.base, ch); try { if (!fs.statSync(cd).isDirectory()) return; } catch (e) { return; }
         var td = titlesDir(ch);
@@ -318,20 +394,30 @@ function enqueueUpscale(tf) {
     if (jobs.some(function (j) { return j.titleFolder === tf && (j.state === "queued" || j.state === "running"); })) return null;
     var j = { id: "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), titleFolder: tf, title: path.basename(tf) + " · upscale", state: "queued", detail: "", log: [], done: 0, total: 0, upscale: true, addedAt: new Date().toISOString() }; jobs.push(j); tick(); return j;
 }
+/* a job's stage board (the Queue card draws it): setStage(j, key, state[, done, total]) */
+function setStage(j, key, state, done, total) {
+    if (!j.stages) j.stages = [];
+    var st = j.stages.filter(function (x) { return x.key === key; })[0]; if (!st) { st = { key: key, state: "todo", done: 0, total: 0 }; j.stages.push(st); }
+    st.state = state; if (done != null) st.done = done; if (total != null) st.total = total;
+    if (state === "running") { j.stage = key; if (!st.startedAt) st.startedAt = Date.now(); }
+    if (state === "done" || state === "failed") st.endedAt = Date.now();
+    var run = j.stages.filter(function (x) { return x.state === "running"; });
+    j.progress = run.map(function (x) { return x.key + (x.total ? " " + x.done + "/" + x.total : ""); }).join(" · ");
+}
 function enqueue(tf, force) { if (jobs.some(function (j) { return j.titleFolder === tf && (j.state === "queued" || j.state === "running"); })) return null; var j = { id: "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), titleFolder: tf, title: path.basename(tf), state: "queued", detail: "", log: [], done: 0, total: 0, force: !!force, addedAt: new Date().toISOString() }; jobs.push(j); tick(); return j; }
 function tick() {
     if (running) return; var j = jobs.filter(function (x) { return x.state === "queued"; })[0]; if (!j) return;
-    running = true; j.state = "running";
+    running = true; j.state = "running"; j.startedAt = Date.now();
     if (j.task) { current = j; j.abort = { aborted: false, soft: false };
         Promise.resolve().then(function () { return j.run(j); })
             .then(function (r) { j.state = j.abort.aborted ? "killed" : "done"; log(j, (j.abort.aborted ? "KILLED" : "DONE") + (r && r.summary ? " — " + r.summary : "")); })
             .catch(function (e) { j.state = "failed"; j.error = String(e && e.message || e); log(j, "FAILED — " + j.error); })
-            .then(function () { running = false; current = null; setTimeout(tick, 200); }); return; }
+            .then(function () { running = false; current = null; invalidateTitles(); setTimeout(tick, 200); }); return; }
     if (j.upscale) { current = j; j.abort = { aborted: false, soft: false };
         UP.runTitle(j.titleFolder, Object.assign({}, config.upscaler, { abort: j.abort, workflow: config.upscaler.workflow || null }), function (m) { log(j, m); }, function (d, t, x) { j.done = d; j.total = t; j.detail = x ? ("last: " + x) : ""; })
             .then(function (r) { if (r.cancelled) { j.state = "killed"; log(j, "KILLED — " + r.done + " painted"); } else { j.state = r.failed ? "failed" : "done"; j.error = r.failed ? (r.failed + " image(s) failed — press upscale again to retry them") : ""; log(j, (r.failed ? "FAILED — " : "DONE — ") + r.done + " painted" + (r.failed ? ", " + r.failed + " failed (left as originals; upscale again to retry)" : "") + (r.seconds ? " in " + Math.round(r.seconds) + " s" : "")); } })
             .catch(function (e) { j.state = "failed"; j.error = String(e && e.message || e); log(j, "FAILED — " + j.error); })
-            .then(function () { running = false; current = null; setTimeout(tick, 200); }); return; }
+            .then(function () { running = false; current = null; invalidateTitles(); setTimeout(tick, 200); }); return; }
     if (j.grab) { current = j; j.abort = { aborted: false, soft: false }; runGrab(j).catch(function (e) { j.state = "failed"; j.error = String(e && e.message || e); log(j, "FAILED — " + j.error); }).then(function () { running = false; current = null; setTimeout(tick, 200); }); return; }
     var parts = j.titleFolder.split(/[\\/]/), channel = channelOf(j.titleFolder), tname = (parts[parts.length - 1] || "").replace(/^\d+\.\s+/, "");
     var info = inspect(j.titleFolder, channel, 0, tname);
@@ -341,27 +427,53 @@ function tick() {
             .then(function (bad) { if (bad.length) log(j, "removed undecodable: " + bad.join(", ")); return downloadStills(j.titleFolder, info, function (m) { log(j, m); }, j); })
             .then(function () { info = inspect(j.titleFolder, channel, 0, tname); j.state = info.needDownload.length ? "failed" : "done"; j.error = info.needDownload.length ? ("still missing: " + info.needDownload.join(", ")) : ""; log(j, j.state === "done" ? ("DONE — " + info.images.have + "/" + info.images.need + " images on disk") : ("FAILED — " + j.error)); })
             .catch(function (e) { j.state = "failed"; j.error = String(e && e.message || e); log(j, "FAILED — " + j.error); })
-            .then(function () { running = false; setTimeout(tick, 200); });
+            .then(function () { running = false; invalidateTitles(); setTimeout(tick, 200); });
         return;
     }
     Promise.resolve().then(function () {
         if (!info.subject && info.packageZip) { var up = unpackPackage(j.titleFolder); log(j, "package unpacked: " + up.files + " file(s)"); info = inspect(j.titleFolder, channel, 0, tname); }
-        var hard = info.missing.filter(function (m) { return !/downloaded automatically/.test(m); }); if (hard.length) throw new Error(hard.join("; "));
-        return verifyStills(info).then(function (bad) {
-            if (bad.length) log(j, bad.length + " image(s) on disk could not be decoded and were removed for re-download: " + bad.join(", "));
-            var need = info.specials.filter(function (s) { return !s.still; }).map(function (s) { return s.name; });
-            if (!need.length) { log(j, "images: all " + info.total + " on disk"); return; }
-            log(j, "downloading " + need.length + " image(s) with RUVI Studio's Navigate engine (persistent rounds)");
-            return downloadStills(j.titleFolder, info, function (m) { log(j, m); }, j)
-                .then(function () { info = inspect(j.titleFolder, channel, 0, tname); if (info.needDownload.length) throw new Error("still missing after download: " + info.needDownload.join(", ")); });
-        });
-    }).then(function () {
+        // fail FAST, before any minute is spent: the package, the AI images, the tools
+        var hard = info.missing.filter(function (m) { return !/downloaded automatically/.test(m) && !/^AI images:/.test(m) && !/^no download links/.test(m); }); if (hard.length) throw new Error(hard.join("; "));
         if (!health.ffmpeg) throw new Error("ffmpeg is not installed yet — the app is fetching it (see the banner); press RUN again when the chip is green");
         if ((config.render.engine || "native") === "chrome" && !CAP.findChrome(config.render)) throw new Error("no Chrome/Edge found yet — the app is fetching Chrome for Testing; press RUN again when the chip is green");
         if ((config.render.engine || "native") !== "chrome") { try { require("@napi-rs/canvas"); } catch (e) { throw new Error("the native renderer package (@napi-rs/canvas) is not installed yet — the app runs npm install at startup; press RUN again when the renderer chip is green"); } }
         try { fs.mkdirSync(path.join(HERE, "runtime", "tmp"), { recursive: true }); } catch (e) {}
+        var blocked = (info.plan || []).filter(function (x) { return x.state === "blocked"; }); if (blocked.length) throw new Error(blocked.map(function (x) { return x.label + ": " + x.detail; }).join("; "));
+        (info.plan || []).forEach(function (x) { setStage(j, x.key, x.state === "todo" ? "todo" : x.state, x.have || 0, x.need || 0); });
+        log(j, "plan: " + (info.plan || []).map(function (x) { return x.label + " " + (x.state === "todo" ? "→ run" : x.state); }).join(" · "));
+        // STAGE generate → upscale runs beside STAGE images → ambience: Gemini / RunPod and Wikimedia / Freesound are different resources
+        return bothOrStop(j, generateStage(j, channel).then(function () { return upscaleStage(j, channel); }), stillsStage().then(function () { return ambienceStage(); }));
+        function stillsStage() {
+            if (!info.total) { setStage(j, "images", "skip"); return Promise.resolve(); }
+            setStage(j, "images", "running", info.images.have, info.images.need);
+            return verifyStills(info).then(function (bad) {
+                if (bad.length) log(j, bad.length + " image(s) on disk could not be decoded and were removed for re-download: " + bad.join(", "));
+                var need = info.specials.filter(function (s) { return !s.still; }).map(function (s) { return s.name; });
+                if (!need.length) { log(j, "images: all " + info.total + " on disk"); setStage(j, "images", "done", info.total, info.total); return; }
+                log(j, "images: downloading " + need.length + " still(s) with RUVI Studio's Navigate engine (persistent rounds)");
+                function dl() { return downloadStills(j.titleFolder, info, function (m) { log(j, m); var mm = /(\d+)\s*\/\s*(\d+)/.exec(m); if (mm) setStage(j, "images", "running", +mm[1], +mm[2]); }, j); }
+                var waited = false;
+                function attempt() {
+                    return dl().catch(function (e) {
+                        if (/rate-limit wall/.test(String(e && e.message)) && !waited && !j.abort.aborted && !j.abort.soft) {
+                            waited = true; log(j, "images: Wikimedia's rate-limit wall — waiting 10 minutes, then resuming automatically (the upscale keeps running)"); j.detail = "images: waiting out the rate-limit wall (10 min)";
+                            return new Promise(function (res, rej) { var left = 600; (function tickW() { if (j.abort.aborted) return rej(new Error("killed")); if (left <= 0) return res(); left -= 5; setTimeout(tickW, 5000); })(); }).then(function () { info = inspect(j.titleFolder, channel, 0, tname); return dl(); });
+                        }
+                        throw e;
+                    });
+                }
+                return attempt().then(function () { info = inspect(j.titleFolder, channel, 0, tname); if (info.needDownload.length) throw new Error("still missing after download: " + info.needDownload.join(", ")); setStage(j, "images", "done", info.images.have, info.images.need); });
+            });
+        }
+        function ambienceStage() {
+            var tA = ST.readTitle(j.titleFolder); if (!tA || !tA.sfx) { setStage(j, "ambience", "skip"); return fetchAmbience(j); }
+            setStage(j, "ambience", "running"); return fetchAmbience(j).then(function () { setStage(j, "ambience", "done"); });
+        }
+    }).then(function () {
         var todo = info.specials.filter(function (s) { return j.force || !s.done; });
-        return fetchAmbience(j).then(function () { return renderParts(); });
+        info = inspect(j.titleFolder, channel, 0, tname); todo = info.specials.filter(function (s) { return j.force || !s.done; });   // painted images changed recipes; stills arrived
+        setStage(j, "render", "running", 0, 0);
+        return renderParts().then(function () { setStage(j, "render", "done", j.total, j.total); });
         function renderParts() {
         // the AI sections: every AI item of the auto structure becomes a part too (native sub-pixel pan), reused by the assembler when its recipe matches
         var tRead = ST.readTitle(j.titleFolder), aiTodo = [], aiAll = [];
@@ -370,7 +482,7 @@ function tick() {
             tRead.auto.items.forEach(function (it) { if (it.kind !== "AI") return; var a = ST.assetsFor(j.titleFolder, it, tRead.bd); if (!a.image) return; it._asset = a; var out = AS.segName(work, it), sig = AS.recipe(it, cfgR), old = ""; try { old = fs.readFileSync(out + ".json", "utf8"); } catch (e) {}
                 var part = { ai: true, name: "AI " + ST.aiStem(it.image) + " (pan " + it.pan + ")", item: it, out: out, sig: sig, done: fs.existsSync(out) && old === sig && !j.force }; aiAll.push(part); if (!part.done) aiTodo.push(part); });
         }
-        j.total = info.specials.length + aiAll.length; j.done = (info.specials.length - todo.length) + (aiAll.length - aiTodo.length);
+        j.total = info.specials.length + aiAll.length; j.done = (info.specials.length - todo.length) + (aiAll.length - aiTodo.length); setStage(j, "render", "running", j.done, j.total); j._renderStage = true;
         todo = todo.concat(aiTodo);
         if (!todo.length) { log(j, "all " + info.specials.length + " special section(s) already rendered in " + info.outBase); return; }
         return lowResStills(info).then(function (low) {
@@ -393,7 +505,7 @@ function tick() {
                 return (config.render.threads === false ? CAP.renderAny : CAP.renderSectionThreaded)({ kind: "ai", engine: "native", tmpDir: path.join(HERE, "runtime", "tmp"), imagePath: it._asset.image, pan: it.pan, zoomIn: (it.auto % 2 === 0), durationSec: durA, fps: config.render.fps, zoom: config.render.zoom, zoomDrift: config.render.zoomDrift, fadeSec: config.render.fadeSec,
                         out: s.out + ".part.mp4", preset: config.render.preset, crf: config.render.crf, encoder: encoderFor(), nvencCq: config.render.nvencCq, nvencPreset: config.render.nvencPreset, abort: j.abort,
                         onStep: function (m) { if (/^frame /.test(m)) { j.detail = s.name + ": " + m; } else log(j, s.name + ": " + m); } })
-                    .then(function (r) { fs.renameSync(s.out + ".part.mp4", s.out); fs.writeFileSync(s.out + ".json", s.sig); j.done++; log(j, s.name + " ✓ " + r.frames + " frames in " + r.seconds.toFixed(0) + "s (" + (r.frames / r.seconds).toFixed(1) + " fps)"); })
+                    .then(function (r) { fs.renameSync(s.out + ".part.mp4", s.out); fs.writeFileSync(s.out + ".json", s.sig); j.done++; setStage(j, "render", "running", j.done, j.total); log(j, s.name + " ✓ " + r.frames + " frames in " + r.seconds.toFixed(0) + "s (" + (r.frames / r.seconds).toFixed(1) + " fps)"); })
                     .catch(function (e) { firstErr = firstErr || e; try { fs.unlinkSync(s.out + ".part.mp4"); } catch (e2) {} })
                     .then(worker);
             }
@@ -407,7 +519,7 @@ function tick() {
                     fadeSec: config.render.fadeSec, audio: (config.render.audio && info.voPath) ? { path: info.voPath, startSec: s.t0 / 1000 } : null, abort: j.abort,
                     encoder: encoderFor(), nvencCq: config.render.nvencCq, nvencPreset: config.render.nvencPreset,
                     onStep: function (m) { if (/^frame /.test(m)) { j.detail = s.name + ": " + m; } else log(j, s.name + ": " + m); } });
-            }).then(function (r) { fs.renameSync(s.out + ".part.mp4", s.out); j.done++; log(j, s.name + " ✓ " + r.frames + " frames in " + r.seconds.toFixed(0) + "s (" + (r.frames / r.seconds).toFixed(1) + " fps, " + (r.capture || "") + ", " + r.encoder + (r.gpu ? ", GPU " + r.gpu.replace(/^ANGLE \(/, "").replace(/\)$/, "").slice(0, 60) : "") + ") → " + s.out); writeLedger(info, s); })
+            }).then(function (r) { fs.renameSync(s.out + ".part.mp4", s.out); j.done++; setStage(j, "render", "running", j.done, j.total); log(j, s.name + " ✓ " + r.frames + " frames in " + r.seconds.toFixed(0) + "s (" + (r.frames / r.seconds).toFixed(1) + " fps, " + (r.capture || "") + ", " + r.encoder + (r.gpu ? ", GPU " + r.gpu.replace(/^ANGLE \(/, "").replace(/\)$/, "").slice(0, 60) : "") + ") → " + s.out); writeLedger(info, s); })
               .catch(function (e) { firstErr = firstErr || e; try { fs.unlinkSync(s.out + ".part.mp4"); } catch (e2) {} })
               .then(worker);
         }
@@ -415,14 +527,16 @@ function tick() {
         return Promise.all(pool).then(function () { if (firstErr) throw firstErr; });
         });
         }
-    }).then(function () { return assembleTitle(j, info); })
-      .then(function (r) {
+    }).then(function () { setStage(j, "final", "running"); return assembleTitle(j, info); })
+      .then(function (r) { setStage(j, "final", "done");
           try { var sc2 = path.join(j.titleFolder, "Script"), dn = listFiles(sc2).filter(function (x) { return /_description\.txt$/i.test(x); })[0]; if (dn) { fs.copyFileSync(path.join(sc2, dn), r.out.replace(/\.mp4$/i, ".txt")); log(j, "description → " + path.basename(r.out.replace(/\.mp4$/i, ".txt")) + " (paste into YouTube; a PINNED COMMENT line, if any, goes in as the first comment)"); } } catch (e) {}
           if (config.render.keepParts === false) { try { fs.rmSync(path.join(j.titleFolder, ST.PARTS), { recursive: true, force: true }); log(j, "parts folder removed (render.keepParts = false)"); } catch (e5) {} }
           j.state = "done"; log(j, "DONE — the whole video: " + r.out + " (" + r.duration.toFixed(1) + " s)"); })
-      .catch(function (e) { var m = String(e && e.message || e); j.state = j.abort.aborted ? "killed" : (j.stopped ? "stopped" : "failed"); j.error = m; log(j, (j.abort.aborted ? "KILLED" : (j.stopped ? "STOPPED" : "FAILED")) + " — " + m); try { info.specials.forEach(function (s) { if (fs.existsSync(s.out + ".part.mp4")) fs.unlinkSync(s.out + ".part.mp4"); }); } catch (e2) {} })
-      .then(function () { running = false; current = null; setTimeout(tick, 200); });
+      .catch(function (e) { var m = String(e && e.message || e); if (j.siblingStop) j.stopped = false; j.state = j.abort.aborted ? "killed" : (j.stopped ? "stopped" : "failed"); j.error = m; (j.stages || []).forEach(function (x) { if (x.state === "running") x.state = j.abort.aborted || j.stopped ? "stopped" : "failed"; }); j.progress = ""; log(j, (j.abort.aborted ? "KILLED" : (j.stopped ? "STOPPED" : "FAILED")) + " — " + m); try { info.specials.forEach(function (s) { if (fs.existsSync(s.out + ".part.mp4")) fs.unlinkSync(s.out + ".part.mp4"); }); } catch (e2) {} })
+      .then(function () { running = false; current = null; invalidateTitles(); pruneJobs(); setTimeout(tick, 200); });
 }
+/* the list of jobs never grows past 60 finished ones (the UI's clear removes them earlier) */
+function pruneJobs() { var fin = jobs.filter(function (x) { return x.state !== "running" && x.state !== "queued"; }); if (fin.length > 60) { var drop = fin.slice(0, fin.length - 60); jobs = jobs.filter(function (x) { return drop.indexOf(x) < 0; }); } }
 /* the channel's CTA clips: <base>\<CHANNEL>\CTA\*.mp4|mov|mkv in name order (CTA 1 …, CTA 2 …) with their durations */
 var CTA_SECONDS = {};
 function ctaClipsFor(ch) {
@@ -434,6 +548,19 @@ function ctaClipsFor(ch) {
 }
 /* what the packet tells the writing room about the inserts: positions, clips, seconds (the remix must cover narration + these) */
 function ctaMeta(ch) { return ctaClipsFor(ch).then(function (clips) { CTA_SECONDS[chanFolder(ch)] = clips.reduce(function (s, c) { return s + (c.durationSec || 0); }, 0); return { channel: chanMarker(ch), folder: path.join(config.base, chanFolder(ch), "CTA"), positions: (config.cta && config.cta.byChannel && config.cta.byChannel[chanFolder(ch)]) || (config.cta && config.cta.positions) || [0.2, 0.5], clips: clips.map(function (c, i) { return { index: i + 1, file: path.basename(c.file), seconds: +c.durationSec.toFixed(2), position: c.position }; }), totalSeconds: +clips.reduce(function (s, c) { return s + c.durationSec; }, 0).toFixed(2), rule: "CTA n is inserted at the section start nearest position n of the narration; the narration pauses, the music runs through; final length = narration + totalSeconds" }; }); }
+/* the AI images of a title, one row per AI IMAGE n: present on disk or missing, with the section and the prompt — for the UI's prompts panel (copy for TurboFlow-style bulk tools) */
+function aiPrompts(titleFolder) {
+    var t = ST.readTitle(titleFolder); if (t.error) return { ok: false, error: t.error };
+    if (!t.auto) return { ok: false, error: (t.errors || []).join("; ") || "no auto structure" };
+    var items = t.auto.items.filter(function (x) { return x.kind === "AI"; }).map(function (x) {
+        var f = ST.assetsFor(titleFolder, x, t.bd).image;
+        return { image: x.image, stem: ST.aiStem(x.image), section: x.section, auto: x.auto, present: !!f, file: f ? path.basename(f) : "", prompt: x.prompt || "", t0: x.t0, t1: x.t1, pan: x.pan || "" };
+    });
+    var missing = items.filter(function (x) { return !x.present; }).map(function (x) { return x.stem; }), gst = genState(titleFolder), ch = channelOf(titleFolder);
+    items.forEach(function (x) { var g = gst.images[x.stem]; if (g) { x.blocked = !!g.blocked; x.reason = g.reason || ""; x.error = g.error || ""; x.attempts = g.attempts || 0; } });
+    return { ok: true, subject: t.subject, folder: path.join(titleFolder, ST.FOLDER.AI), promptsPath: t.autoPath ? t.autoPath.replace(/_auto_video_structure\.txt$/i, "_ai_prompts.txt") : "", need: items.length, have: items.length - missing.length, missing: missing, items: items,
+             gen: { enabled: genChannel(ch), key: !!secretsJson().geminiKey, model: (config.imagegen || {}).model || IG.KNOWN_MODELS[0].id, lastRun: gst.lastRun || "", generated: gst.generated || 0 }, turboflow: tfBatchInfo(titleFolder), tfDir: tfDir() };
+}
 /* the ambience sounds of a title, fetched ahead of the render: every cue resolved against <CHANNEL>\SFX\, the missing ones downloaded now */
 function fetchAmbience(j) {
     var t = ST.readTitle(j.titleFolder); if (!t || !t.sfx || !t.bd) { log(j, "ambience: no _sfx.json in the package — the bed will be silent"); return Promise.resolve(); }
@@ -446,6 +573,144 @@ function fetchAmbience(j) {
         uniq.forEach(function (c) { seq = seq.then(function () { if (j.abort.aborted) return; j.detail = "\u201c" + c.sound + "\u201d"; return SFX.resolveCue({ dir: sd, freesoundKey: key, catalog: cat, log: function (m) { log(j, m); }, contact: config.download.contact, abort: j.abort }, c, ix).then(function (r) { if (r && r.file) got++; else missing.push(c.sound); if (j.task === "sfx") j.done++; }); }); });
         return seq.then(function () { return SFX.analyzeDirs(sds, function (m) { log(j, m); }); }).then(function () { log(j, "ambience: " + got + "/" + uniq.length + " sound(s) in place" + (missing.length ? " — not found: " + missing.join(", ") + (key ? "" : " (add a free Freesound API key as \"freesoundKey\" in _SECRETS\\secrets.json)") : "")); });
     });
+}
+/* two stage chains in parallel: the first failure stops the other one (the download handle is cancelled, the upscale stops after
+   the image in flight) and the run fails with that error once both have settled — nothing keeps running into the next job */
+function bothOrStop(j, pa, pb) {
+    var firstErr = null;
+    function guard(p) { return p.then(function (v) { return { ok: true, v: v }; }, function (e) { if (!firstErr) { firstErr = e; if (!j.abort.aborted) { j.abort.soft = true; j.siblingStop = true; } if (j.dlHandle) { try { j.dlHandle.cancel(); } catch (e2) {} } } return { ok: false, e: e }; }); }
+    return Promise.all([guard(pa), guard(pb)]).then(function () { if (firstErr) throw firstErr; });
+}
+/* STAGE generate: the missing AI images straight from the Gemini API (lib/imagegen.js). Blocked prompts and exhausted retries
+   stop the run with the list, so the prompt can be edited (prompts panel) or the key / quota looked at. */
+function genItems(tf) {
+    var t = ST.readTitle(tf); if (!t || !t.auto) return [];
+    return t.auto.items.filter(function (x) { return x.kind === "AI"; }).map(function (x) { return { image: x.image, stem: ST.aiStem(x.image), prompt: x.prompt || "", section: x.section, present: !!ST.assetsFor(tf, x, t.bd).image }; });
+}
+function generateStage(j, channel, only) {
+    var items = genItems(j.titleFolder), missing = items.filter(function (x) { return !x.present && (!only || only.indexOf(x.stem) >= 0); });
+    if (!items.length) { setStage(j, "generate", "skip"); return Promise.resolve(); }
+    if (!missing.length) { setStage(j, "generate", "done", items.length, items.length); return Promise.resolve(); }
+    var key = secretsJson().geminiKey || "";
+    if (!genChannel(channel)) return Promise.reject(new Error("generate: " + missing.length + " AI image(s) missing and automatic generation is off for " + channel + " — generate them with the prompts panel (TurboFlow) or enable Gemini generation in Settings"));
+    if (!key) return Promise.reject(new Error("generate: " + missing.length + " AI image(s) missing and no \"geminiKey\" in _SECRETS\\secrets.json — add your AI Studio key, or generate them with the prompts panel (TurboFlow)"));
+    var gst = genState(j.titleFolder), todo = missing.filter(function (x) { return !(gst.images[x.stem] && gst.images[x.stem].blocked); }), blockedBefore = missing.length - todo.length;
+    if (!todo.length) return Promise.reject(new Error("generate: " + blockedBefore + " prompt(s) are blocked by the safety filter — edit them in the prompts panel, then RUN again"));
+    var emptyP = todo.filter(function (x) { return !x.prompt.trim(); }); if (emptyP.length) return Promise.reject(new Error("generate: no prompt for " + emptyP.map(function (x) { return x.stem; }).join(", ") + " in the auto structure"));
+    setStage(j, "generate", "running", items.length - missing.length, items.length);
+    var cfg = config.imagegen || {}, base = items.length - missing.length;
+    return IG.runItems(todo, { key: key, model: cfg.model || IG.KNOWN_MODELS[0].id, imageSize: cfg.imageSize || "2K", aspectRatio: cfg.aspectRatio || "16:9", parallel: cfg.parallel || 2, retries: cfg.retries == null ? 4 : cfg.retries, dir: path.join(j.titleFolder, ST.FOLDER.AI), abort: j.abort },
+        function (m) { log(j, m); }, function (d, t, x) { setStage(j, "generate", "running", base + d, base + t); if (x) j.detail = "generate: " + x; })
+    .then(function (r) {
+        var st = genState(j.titleFolder); todo.forEach(function (x) { st.images[x.stem] = Object.assign(st.images[x.stem] || {}, { attempts: ((st.images[x.stem] || {}).attempts || 0) + 1, at: new Date().toISOString(), blocked: false, error: "" }); });
+        (r.blocked || []).forEach(function (b) { st.images[b.stem] = Object.assign(st.images[b.stem] || {}, { blocked: true, reason: b.reason }); });
+        (r.errors || []).forEach(function (e) { st.images[e.stem] = Object.assign(st.images[e.stem] || {}, { error: e.error }); });
+        st.model = cfg.model || IG.KNOWN_MODELS[0].id; st.lastRun = new Date().toISOString(); st.generated = (st.generated || 0) + r.done; saveGenState(j.titleFolder, st); invalidateTitles();
+        if (r.cancelled || j.abort.aborted) throw new Error("killed");
+        var left = genItems(j.titleFolder).filter(function (x) { return !x.present; });
+        if (r.fatal) throw new Error("generate: " + r.fatal + " — check the key in _SECRETS\\secrets.json and the model id in Settings");
+        if (left.length) throw new Error("generate: " + r.done + " image(s) made, " + left.length + " still missing — " + ((r.blocked || []).length ? (r.blocked.length + " blocked by the safety filter (" + r.blocked.map(function (b) { return b.stem; }).join(", ") + "): edit those prompts in the prompts panel; " ) : "") + ((r.errors || []).length ? r.errors.length + " failed after retries (" + r.errors.slice(0, 3).map(function (e) { return e.stem + ": " + e.error.slice(0, 60); }).join("; ") + ") — RUN again retries them" : ""));
+        setStage(j, "generate", "done", items.length, items.length); log(j, "generate: done — " + r.done + " image(s) in " + Math.round(r.seconds) + " s");
+    });
+}
+/* edit one AI prompt in place: the auto structure (txt + json twin) and the ai_prompts files follow; a blocked mark is cleared */
+function editPrompt(tf, image, prompt) {
+    var t = ST.readTitle(tf); if (!t || !t.autoPath) return { ok: false, error: "no auto structure" };
+    prompt = String(prompt || "").replace(/\r?\n/g, " ").trim(); if (prompt.length < 20) return { ok: false, error: "the prompt is too short" };
+    var lines = fs.readFileSync(t.autoPath, "utf8").split(/\r?\n/), hdr = new RegExp("^AUTO\\s+\\d+\\s*\\|.*AI IMAGE\\s+" + (+image) + "\\s*$"), i0 = -1;
+    for (var i = 0; i < lines.length; i++) if (hdr.test(lines[i])) { i0 = i; break; }
+    if (i0 < 0) return { ok: false, error: "AI IMAGE " + image + " not in the auto structure" };
+    var pi = -1; for (var k = i0 + 1; k < lines.length; k++) { if (/^AUTO\s+\d+\s*\|/.test(lines[k])) break; if (lines[k] === "PROMPT:") { pi = k; break; } }
+    if (pi < 0) return { ok: false, error: "no PROMPT: line for AI IMAGE " + image };
+    var end = pi + 1; while (end < lines.length && lines[end].trim() !== "" && !/^-{10,}$/.test(lines[end]) && !/^AUTO\s+\d+\s*\|/.test(lines[end])) end++;
+    lines.splice(pi + 1, end - (pi + 1), prompt); fs.writeFileSync(t.autoPath, lines.join("\n"));
+    var jp = t.autoPath.replace(/\.txt$/i, ".json"); try { var jj = readJson(jp, null); if (jj && jj.items) { jj.items.forEach(function (it) { if (it.kind === "AI" && it.image === +image) it.prompt = prompt; }); if (jj.aiImages) jj.aiImages.forEach(function (ai) { if ((ai.image || ai.index) === +image) ai.prompt = prompt; }); fs.writeFileSync(jp, JSON.stringify(jj, null, 1)); } } catch (e) {}
+    try { var t2 = ST.readTitle(tf), pr = t2.auto.items.filter(function (x) { return x.kind === "AI"; }).map(function (x) { return x.prompt.replace(/\s+/g, " ").trim(); }), pp = listFiles(path.join(tf, "Script")).filter(function (n) { return /_ai_prompts\.txt$/i.test(n); })[0]; if (pp) fs.writeFileSync(path.join(tf, "Script", pp), pr.join("\n") + "\n"); var pc = listFiles(path.join(tf, "Script")).filter(function (n) { return /_ai_prompts\.csv$/i.test(n); })[0]; if (pc) fs.writeFileSync(path.join(tf, "Script", pc), "index,file,prompt\r\n" + t2.auto.items.filter(function (x) { return x.kind === "AI"; }).map(function (x) { return x.image + "," + ST.aiStem(x.image) + ".jpg,\"" + x.prompt.replace(/\s+/g, " ").trim().replace(/"/g, "\"\"") + "\""; }).join("\r\n") + "\r\n"); } catch (e) {}
+    var st = genState(tf); if (st.images[ST.aiStem(image)]) { st.images[ST.aiStem(image)].blocked = false; st.images[ST.aiStem(image)].reason = ""; st.images[ST.aiStem(image)].edited = new Date().toISOString(); saveGenState(tf, st); }
+    invalidateTitles(); glog("prompt " + ST.aiStem(image) + " edited in " + path.basename(tf)); return { ok: true, image: +image, prompt: prompt };
+}
+/* ---- the TurboFlow bridge: the prompts panel's "copy" records WHICH images the pasted list stands for (TurboFlow numbers a pasted
+   list 001, 002 … from the top), and the watcher files the extension's numbered downloads into the title's AI Images\ by that map ---- */
+function tfDir() { return (config.turboflow && config.turboflow.dir) || path.join(os.homedir(), "Downloads", "turboflow"); }
+function tfBatchPath(tf) { return path.join(tf, "Script", "_turboflow_batch.json"); }
+function tfBatchInfo(tf) { var b = readJson(tfBatchPath(tf), null); if (!b || !b.map) return null; var pending = Object.keys(b.map).filter(function (k) { return !b.received || !b.received[k]; }); return { at: b.at, total: Object.keys(b.map).length, received: Object.keys(b.map).length - pending.length, pending: pending, map: b.map, dir: b.dir || tfDir() }; }
+function tfRecordBatch(tf, images) {
+    var items = genItems(tf), stems = items.map(function (x) { return x.stem; }), list = (images || []).map(function (i) { return typeof i === "number" ? ST.aiStem(i) : String(i); }).filter(function (st) { return stems.indexOf(st) >= 0; });
+    if (!list.length) return { ok: false, error: "no images in the batch" };
+    var map = {}; list.forEach(function (st, k) { map[String(k + 1).padStart(3, "0")] = st; });
+    var rec = { at: new Date().toISOString(), dir: tfDir(), map: map, received: {}, note: "TurboFlow numbers the pasted prompts from 001; this map says which AI image each number stands for" };
+    try { fs.writeFileSync(tfBatchPath(tf), JSON.stringify(rec, null, 1)); } catch (e) { return { ok: false, error: e.message }; }
+    invalidateTitles(); glog("TurboFlow batch recorded for " + path.basename(tf) + ": " + list.length + " prompt(s) (" + list.slice(0, 5).join(", ") + (list.length > 5 ? "…" : "") + ") — watching " + rec.dir);
+    return { ok: true, total: list.length, dir: rec.dir };
+}
+function tfImport(tf, logf) {
+    logf = logf || glog; var b = readJson(tfBatchPath(tf), null); if (!b || !b.map) return { ok: false, error: "no TurboFlow batch recorded — press copy in the prompts panel first" };
+    var dir = b.dir || tfDir(), names; try { names = fs.readdirSync(dir); } catch (e) { return { ok: false, error: "TurboFlow folder not found: " + dir }; }
+    var since = Date.parse(b.at) - 60000, moved = 0, got = [], dst = path.join(tf, ST.FOLDER.AI); fs.mkdirSync(dst, { recursive: true }); b.received = b.received || {};
+    Object.keys(b.map).forEach(function (num) {
+        if (b.received[num]) return;
+        var cands = names.filter(function (n) { var m = /^(\d{3})([a-z]?)\.(png|jpe?g|webp)$/i.exec(n); return m && m[1] === num; }).sort();   // 001.png first, then 001b.png …
+        for (var i = 0; i < cands.length; i++) {
+            var f = path.join(dir, cands[i]), st; try { st = fs.statSync(f); } catch (e) { continue; }
+            if (st.mtimeMs < since || st.size < 10240) continue;
+            try { var probe = fs.openSync(f, "r+"); fs.closeSync(probe); } catch (e) { continue; }   // still being written by Chrome
+            var stem = b.map[num], target = path.join(dst, stem + path.extname(f).toLowerCase().replace("jpeg", "jpg"));
+            if (ST.findFile(dst, stem, null)) { b.received[num] = cands[i]; break; }   // already there (a manual copy)
+            try { fs.renameSync(f, target); } catch (e) { try { fs.copyFileSync(f, target); fs.unlinkSync(f); } catch (e2) { logf("TurboFlow: cannot move " + cands[i] + " — " + e2.message); continue; } }
+            b.received[num] = cands[i]; moved++; got.push(num + " → " + stem); break;
+        }
+    });
+    try { fs.writeFileSync(tfBatchPath(tf), JSON.stringify(b, null, 1)); } catch (e) {}
+    var pending = Object.keys(b.map).filter(function (k) { return !b.received[k]; });
+    if (moved) { invalidateTitles(); logf("TurboFlow: " + moved + " image(s) filed into AI Images\\ (" + got.slice(0, 6).join(", ") + (got.length > 6 ? "…" : "") + ") — " + (pending.length ? pending.length + " still expected" : "batch complete")); }
+    if (!pending.length) { try { fs.renameSync(tfBatchPath(tf), tfBatchPath(tf).replace(/\.json$/, ".done.json")); } catch (e) {} }
+    return { ok: true, moved: moved, pending: pending.length, total: Object.keys(b.map).length };
+}
+function tfWatchTick() {
+    if (!(config.turboflow && config.turboflow.watch !== false)) return;
+    try { listFiles(config.base).forEach(function (ch) { if (/^_/.test(ch)) return; var td = titlesDir(ch); listFiles(td).forEach(function (t) { if (!/^\d+\.\s/.test(t)) return; var tf = path.join(td, t); if (fs.existsSync(tfBatchPath(tf))) tfImport(tf, glog); }); }); } catch (e) {}
+}
+setInterval(tfWatchTick, 6000);
+/* the upscaler deployment must answer at all before a run spends minutes on it (any HTTP status counts; only a dead host fails) */
+function probeUpscaler(u) {
+    return new Promise(function (resolve, reject) {
+        var mod = /^https:/.test(u) ? require("https") : require("http"), done = false;
+        var req = mod.request(u, { method: "GET", headers: { "User-Agent": "RuviStudio (upscaler probe)" } }, function (res) { res.resume(); if (!done) { done = true; resolve(res.statusCode); } });
+        req.on("error", function (e) { if (!done) { done = true; reject(new Error("upscale: the upscaler at " + u + " does not answer (" + e.message + ") — check the Vercel deployment / your connection, or untick the channel under 'channels that get painted'")); } });
+        req.setTimeout(12000, function () { req.destroy(new Error("timeout")); }); req.end();
+    });
+}
+/* a painted file that cannot be decoded (a half-written download) is removed so the next run paints it again */
+function verifyPainted(tf, suffix, logf) {
+    var dir = path.join(tf, ST.FOLDER.AI), names = listFiles(dir).filter(function (n) { return /\.(jpe?g|png|webp)$/i.test(n) && new RegExp(suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(_\\d+)?\\.[a-z]+$", "i").test(n); }), chain = Promise.resolve(), bad = 0;
+    names.forEach(function (n) { var f = path.join(dir, n); chain = chain.then(function () { if (fs.statSync(f).size < 10240) throw new Error("tiny"); return FF.probe(f).then(function (pi) { if (!pi.width) throw new Error("undecodable"); }); }).catch(function () { bad++; try { fs.unlinkSync(f); } catch (e) {} var raw = path.join(dir, "_raw", n.replace(new RegExp(suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(_\\d+)?(\\.[a-z]+)$", "i"), "$2")); try { if (fs.existsSync(raw)) fs.renameSync(raw, path.join(dir, path.basename(raw))); } catch (e2) {} logf("upscale: " + n + " could not be decoded — removed (its original is back in AI Images\\ for the next run)"); }); });
+    return chain.then(function () { return bad; });
+}
+/* STAGE upscale: the channel's raw AI images → painted (Ruvi's oil upscaler), inside RUN. Failed images are retried once;
+   anything still raw stops the run (a half-painted video is the wrong look) — press RUN again to retry just those. */
+function upscaleStage(j, channel) {
+    if (!paintedChannel(channel)) { setStage(j, "upscale", "skip"); return Promise.resolve(); }
+    var suffix = config.upscaler.suffix || "_painted", P = UP.plan(j.titleFolder, suffix);
+    if (!P.todo.length) { setStage(j, "upscale", P.painted ? "done" : "skip", P.painted, P.painted); log(j, "upscale: nothing raw in AI Images\\ (" + P.painted + " painted)"); return Promise.resolve(); }
+    if (!/^https?:\/\//.test(String(config.upscaler.url || ""))) return Promise.reject(new Error("upscale: set the upscaler URL in Settings → upscaler (or untick " + channel + " under 'channels that get painted')"));
+    var attempt = 0, base = P.painted, softAbort = { get aborted() { return j.abort.aborted || j.abort.soft; } };
+    setStage(j, "upscale", "running", 0, P.todo.length);
+    return probeUpscaler(config.upscaler.url).then(go);
+    function go() {
+        attempt++;
+        return UP.runTitle(j.titleFolder, Object.assign({}, config.upscaler, { abort: softAbort, workflow: config.upscaler.workflow || null }), function (m) { log(j, m); },
+            function (d, t, x) { setStage(j, "upscale", "running", base + d, base + t); if (x) j.detail = "upscale: " + x; })
+        .then(function (r) {
+            if (j.abort.aborted) throw new Error("killed");
+            if (r.cancelled && j.abort.soft) { j.stopped = true; throw new Error("stopped after " + r.done + " painted image(s) — press RUN to continue"); }
+            return verifyPainted(j.titleFolder, suffix, function (m) { log(j, m); }).then(function (bad) { if (bad) r.failed += bad; return r; });
+        }).then(function (r) {
+            if (r.failed && attempt < 2) { log(j, "upscale: " + r.failed + " image(s) failed — retrying them once"); base += r.done; return go(); }
+            if (r.failed) throw new Error("upscale: " + r.failed + " image(s) could not be painted (they stay raw in AI Images\\) — press RUN to retry them, or check the upscaler service");
+            var P2 = UP.plan(j.titleFolder, suffix); setStage(j, "upscale", "done", P2.painted, P2.painted); log(j, "upscale: done — " + P2.painted + " painted" + (r.seconds ? " in " + Math.round(r.seconds / 60) + " min" : ""));
+        });
+    }
+    return go();
 }
 /* the whole video: the AI and special parts, fades at every cut, the CTAs, letterbox, VO + the ambience bed */
 function assembleTitle(j, info) {
@@ -609,7 +874,7 @@ function checkHealth() {
     health.encoder = ENC.checked ? (ENC.nvenc ? ("h264_nvenc · " + ENC.gpu) : ("libx264 (CPU) — " + ENC.why)) : "checking";
     health.tree = TREE; health.channels = listFiles(config.base).filter(function (x) { return !/^_/.test(x) && fs.existsSync(path.join(config.base, x)) && fs.statSync(path.join(config.base, x)).isDirectory(); }).map(function (ch) { return { name: ch, titles: listFiles(titlesDir(ch)).filter(function (t) { return /^\d+\.\s/.test(t); }).length, sfx: Object.keys(SFX.quickIndexes(sfxDirs(ch)).files).length }; });
     health.contact = /[@\/]/.test(String(config.download.contact || ""));
-    health.freesound = !!(secretsJson().freesoundKey);   // Wikimedia User-Agent policy: without a contact the client is capped at 10 requests/minute
+    health.freesound = !!(secretsJson().freesoundKey); health.gemini = !!(secretsJson().geminiKey); health.turboflowDir = fs.existsSync(tfDir());   // Wikimedia User-Agent policy: without a contact the client is capped at 10 requests/minute
     if (fp && (config.ffmpeg === "ffmpeg" || !fs.existsSync(config.ffmpeg))) { config.ffmpeg = fp.ffmpeg; config.ffprobe = fp.ffprobe; FF.configure(config); }
     if (health.ffmpeg && !ENC.checked) return detectEncoder().then(function () { health.encoder = ENC.nvenc ? ("h264_nvenc · " + ENC.gpu) : ("libx264 (CPU) — " + ENC.why); glog("encoder: " + health.encoder); });
     return Promise.resolve();
@@ -625,13 +890,109 @@ function provision(reason) {
     }).catch(function (e) { console.log("provisioning: " + e.message); return checkHealth(); });
 }
 
+/* ---- the in-app updater: drop a RuviStudio_*_update.zip into updates\ (or the app folder, its parent, or Downloads),
+   press UPDATE in the header: the zip is unpacked over the app (a backup of every replaced file goes to runtime\backup\<stamp>\),
+   the change is committed and pushed with git when the folder is a repository, and the server restarts itself. ---- */
+var PKG = readJson(path.join(HERE, "package.json"), { version: "?" }), BOOT_TS = Date.now(), UPD_DIR = path.join(HERE, "updates"), UPD_CACHE = { at: 0, info: null }, UPD_BUSY = false;
+try { fs.mkdirSync(path.join(UPD_DIR, "applied"), { recursive: true }); } catch (e) {}
+try { if (!fs.existsSync(path.join(UPD_DIR, "README.txt"))) fs.writeFileSync(path.join(UPD_DIR, "README.txt"), "Drop RuviStudio_<version>_update.zip files here and press UPDATE in Ruvi Studio's header.\r\nApplied zips move into applied\\. The app also looks in its own folder, the folder above it and your Downloads folder.\r\n"); } catch (e) {}
+function updateCheck(force) {
+    if (!force && UPD_CACHE.info && Date.now() - UPD_CACHE.at < 20000) return UPD_CACHE.info;
+    var dirs = [UPD_DIR, HERE, path.dirname(HERE), path.join(os.homedir(), "Downloads")], cands = [], seen = {};
+    dirs.forEach(function (d) { listFiles(d).forEach(function (n) { if (!/^RuviStudio_.*update\.zip$/i.test(n)) return; var f = path.join(d, n); if (seen[f.toLowerCase()]) return; seen[f.toLowerCase()] = 1; try { var st = fs.statSync(f); if (st.isFile() && st.size > 200) cands.push({ file: f, name: n, dir: d, mtime: st.mtimeMs, size: st.size }); } catch (e) {} }); });
+    cands.sort(function (a, b) { return b.mtime - a.mtime; });
+    var info = { current: PKG.version, candidates: cands.slice(0, 6), latest: cands[0] || null, dropDir: UPD_DIR, last: readJson(path.join(HERE, "runtime", "last_update.json"), null), busy: UPD_BUSY };
+    if (info.latest) { try { info.latest.version = zipVersion(info.latest.file); info.latest.kind = zipKind(info.latest.file); } catch (e) { info.latest.error = e.message; } }
+    UPD_CACHE = { at: Date.now(), info: info }; return info;
+}
+function cmpVer(a, b) { var x = String(a).split(".").map(Number), y = String(b).split(".").map(Number); for (var i = 0; i < 3; i++) { var d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; }
+function zipKind(zip) { var names = UZ.list(zip).map(function (n) { return n.replace(/\\/g, "/"); }), app = names.some(function (n) { return /^(studio\.js|package\.json|ui\/index\.html|lib\/.+)$/.test(n); }), wr = names.some(function (n) { return /^writing-room\//.test(n); }); return app && wr ? "app + writing room" : app ? "app" : wr ? "writing room" : ""; }
+function zipVersion(zip) {
+    var names = UZ.list(zip).map(function (n) { return n.replace(/\\/g, "/"); }); if (names.indexOf("package.json") < 0) return "";
+    var tmp = path.join(HERE, "runtime", "tmp", "updv_" + Date.now()); UZ.extract(zip, tmp, { filter: function (r) { return r === "package.json"; } });
+    var v = (readJson(path.join(tmp, "package.json"), {}) || {}).version || ""; try { fs.rmSync(tmp, { recursive: true, force: true }); } catch (e) {} return v;
+}
+function runGit(args, log) {
+    return new Promise(function (resolve) {
+        var out = "", err = ""; var pr;
+        try { pr = cp.spawn("git", args, { cwd: HERE, windowsHide: true }); } catch (e) { return resolve({ ok: false, out: "", err: e.message, missing: true }); }
+        var to = setTimeout(function () { try { pr.kill(); } catch (e) {} }, 120000);
+        pr.stdout.on("data", function (d) { out += d; }); pr.stderr.on("data", function (d) { err += d; });
+        pr.on("error", function (e) { clearTimeout(to); resolve({ ok: false, out: out, err: e.message, missing: e.code === "ENOENT" }); });
+        pr.on("close", function (code) { clearTimeout(to); var lines = err.trim().split("\n").filter(Boolean), why = lines.filter(function (l) { return /fatal:|error:/i.test(l); })[0] || lines.slice(-1)[0] || ""; log("git " + args.join(" ") + (code === 0 ? " ✓" : " ✗ (" + code + ")") + (why ? " — " + why.slice(0, 160) : "")); resolve({ ok: code === 0, out: out, err: err, why: why }); });
+    });
+}
+function applyUpdate(file, opts) {
+    opts = opts || {}; var log = opts.log || glog;
+    return Promise.resolve().then(function () {
+        if (UPD_BUSY) throw new Error("an update is already being applied");
+        if (running) throw new Error("the queue is busy — let it finish (or kill it) before updating");
+        var info = updateCheck(true), cand = (info.candidates || []).filter(function (c) { return c.file === file; })[0] || info.latest;
+        if (!cand) throw new Error("no RuviStudio_*_update.zip found in " + UPD_DIR + ", the app folder, its parent or Downloads");
+        UPD_BUSY = true; UPD_CACHE.at = 0;
+        var stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19), staging = path.join(HERE, "runtime", "tmp", "update_" + stamp), backup = path.join(HERE, "runtime", "backup", stamp);
+        log("update: unpacking " + cand.name);
+        var files = UZ.extract(cand.file, staging, { filter: function (r) { return !/^(node_modules|runtime|\.git)\//.test(r) && r !== "studio.config.json" && !/^RuviStudio\//.test(r); } });
+        if (!files.length) throw new Error(cand.name + " has no usable files (a zip with the app folder inside it? the paths must start at studio.js / ui / lib / writing-room)");
+        var kind = zipKind(cand.file); if (!kind) throw new Error(cand.name + " is not a Ruvi Studio update zip (no studio.js / package.json / ui / lib / writing-room inside)");
+        var zv = cand.version || zipVersion(cand.file); if (zv && cmpVer(zv, PKG.version) < 0 && !opts.force) { try { fs.rmSync(staging, { recursive: true, force: true }); } catch (e) {} throw new Error(cand.name + " carries version " + zv + ", older than the running " + PKG.version + " — move that zip away (or apply it with force)"); }
+        var replaced = 0, added = 0;
+        files.forEach(function (rel) {
+            var src = path.join(staging, rel), dst = path.join(HERE, rel), abs = path.resolve(dst); if (abs.indexOf(path.resolve(HERE) + path.sep) !== 0) return;
+            if (fs.existsSync(dst)) { var bk = path.join(backup, rel); fs.mkdirSync(path.dirname(bk), { recursive: true }); fs.copyFileSync(dst, bk); replaced++; } else added++;
+            fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst);
+        });
+        try { fs.rmSync(staging, { recursive: true, force: true }); } catch (e) {}
+        var newVersion = (readJson(path.join(HERE, "package.json"), {}) || {}).version || PKG.version;
+        log("update: " + files.length + " file(s) applied (" + replaced + " replaced, " + added + " new) — backup of the replaced ones in runtime\\backup\\" + stamp + " · version " + PKG.version + " → " + newVersion);
+        var dest = path.join(UPD_DIR, "applied", cand.name); try { if (fs.existsSync(dest)) fs.unlinkSync(dest); fs.renameSync(cand.file, dest); } catch (e) { try { fs.copyFileSync(cand.file, dest); fs.unlinkSync(cand.file); } catch (e2) { log("update: could not move the zip into updates\\applied\\ (" + e2.message + ")"); } }
+        var rec = { zip: cand.name, from: PKG.version, to: newVersion, at: new Date().toISOString(), files: files.length, backup: backup, kind: kind, git: null };
+        var gitChain = Promise.resolve(null);
+        if (fs.existsSync(path.join(HERE, ".git")) && opts.git !== false) {
+            gitChain = runGit(["add", "-A"], log).then(function (r) {
+                if (r.missing) return { skipped: "git is not installed — run sync.bat later" };
+                return runGit(["commit", "-m", "update: " + cand.name + " (" + PKG.version + " → " + newVersion + ")"], log).then(function (c) {
+                    if (!c.ok) { var why = (c.err + c.out).trim().split("\n").filter(Boolean).slice(-1)[0] || ""; if (/nothing to commit/i.test(c.out + c.err)) why = "nothing to commit"; if (/auto-detect email|user\.name|user\.email|identity/i.test(c.err)) why += " — set git config user.name / user.email (publish.ps1 asks for them)"; return { committed: false, pushed: false, note: "commit failed: " + why.slice(0, 160) + " — run sync.bat later" }; }
+                    return runGit(["pull", "--rebase", "origin", "main"], log).then(function () { return runGit(["push", "origin", "main"], log); }).then(function (pu) { return { committed: true, pushed: pu.ok, note: pu.ok ? "committed and pushed to GitHub" : "committed; push failed (" + (pu.why || "").slice(0, 120) + ") — run sync.bat later" }; });
+                });
+            });
+        } else gitChain = Promise.resolve({ skipped: fs.existsSync(path.join(HERE, ".git")) ? "git disabled" : "not a git repository (run publish.ps1 once to connect GitHub)" });
+        return gitChain.then(function (g) { rec.git = g; try { fs.mkdirSync(path.join(HERE, "runtime"), { recursive: true }); fs.writeFileSync(path.join(HERE, "runtime", "last_update.json"), JSON.stringify(rec, null, 2)); } catch (e) {} UPD_BUSY = false; UPD_CACHE.at = 0; if (opts.restart !== false) restartSelf("update applied: " + cand.name); return rec; });
+    }).catch(function (e) { UPD_BUSY = false; UPD_CACHE.at = 0; throw e; });
+}
+function restartSelf(why) {
+    glog("restarting — " + why);
+    setTimeout(function () {
+        try { server.close(); } catch (e) {}
+        try { var child = cp.spawn(process.execPath, [path.join(HERE, "studio.js")].concat(process.argv.slice(2)), { cwd: HERE, detached: true, stdio: "ignore", windowsHide: false }); child.unref(); } catch (e) { glog("restart failed to spawn: " + e.message + " — start the app again by hand"); }
+        setTimeout(function () { process.exit(0); }, 400);
+    }, 600);
+}
+
 /* ---- HTTP ------------------------------------------------------------------ */
-function send(res, code, obj) { var body = typeof obj === "string" ? obj : JSON.stringify(obj); res.writeHead(code, { "Content-Type": typeof obj === "string" ? "text/plain; charset=utf-8" : "application/json; charset=utf-8", "Cache-Control": "no-store" }); res.end(body); }
-function body(req) { return new Promise(function (resolve) { var c = []; req.on("data", function (d) { c.push(d); }); req.on("end", function () { try { resolve(JSON.parse(Buffer.concat(c).toString("utf8") || "{}")); } catch (e) { resolve({}); } }); }); }
+function send(res, code, obj) { var body = typeof obj === "string" ? obj : JSON.stringify(obj); res.writeHead(code, Object.assign({ "Content-Type": typeof obj === "string" ? "text/plain; charset=utf-8" : "application/json; charset=utf-8" }, SEC_HEADERS)); res.end(body); }
+var BODY_MAX = 4 * 1024 * 1024;
+function body(req) { return new Promise(function (resolve) { var c = [], n = 0, over = false; req.on("data", function (d) { n += d.length; if (n > BODY_MAX) { over = true; c = []; return; } c.push(d); }); req.on("end", function () { if (over) return resolve({}); try { resolve(JSON.parse(Buffer.concat(c).toString("utf8") || "{}")); } catch (e) { resolve({}); } }); req.on("error", function () { resolve({}); }); }); }
+/* the API is for the page the app serves, on this machine, and nothing else:
+   · Host must be the loopback name the app listens on (a DNS-rebinding page arrives with its own host)
+   · Origin, when a browser sends one, must be the app's own (a cross-site page sends its origin, or none for "no-cors" posts — those are refused too, see Sec-Fetch-Site)
+   · Sec-Fetch-Site, when present, must be same-origin / none (a cross-site fetch says cross-site)
+   · POST bodies must be application/json (a simple cross-site form or text/plain post cannot pass) */
+function localOnly(req) {
+    var host = String(req.headers.host || "").toLowerCase().replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+    if (["localhost", "127.0.0.1", "::1"].indexOf(host) < 0) return "host " + (req.headers.host || "(none)") + " is not the app's loopback name";
+    var origin = req.headers.origin; if (origin) { var o; try { o = new URL(origin); } catch (e) { return "bad origin"; } if (["localhost", "127.0.0.1", "[::1]"].indexOf(o.hostname.toLowerCase()) < 0) return "cross-site origin " + origin; }
+    var sfs = String(req.headers["sec-fetch-site"] || "").toLowerCase(); if (sfs && sfs !== "same-origin" && sfs !== "none") return "cross-site request (" + sfs + ")";
+    if (req.method === "POST" && !/^application\/json/i.test(String(req.headers["content-type"] || ""))) return "POST bodies must be application/json";
+    return "";
+}
+var SEC_HEADERS = { "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Cache-Control": "no-store" };
 var server = http.createServer(function (req, res) {
-    var p = url.parse(req.url, true).pathname;
-    if (req.method === "GET" && (p === "/" || p === "/index.html")) { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); return fs.createReadStream(path.join(HERE, "ui", "index.html")).pipe(res); }
-    if (req.method === "GET" && p === "/api/state") return send(res, 200, { config: config, health: health, running: running, scan: lastScan, jobs: jobs.map(function (j) { var o = Object.assign({}, j); delete o.candidate; o.log = j.log.slice(-3); return o; }) });
+    var p; try { p = new URL(req.url, "http://localhost").pathname; } catch (e) { p = "/"; }
+    if (req.method === "GET" && (p === "/" || p === "/index.html")) { res.writeHead(200, Object.assign({ "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-src https: http://localhost:* http://127.0.0.1:*; base-uri 'none'; form-action 'none'" }, SEC_HEADERS)); return fs.createReadStream(path.join(HERE, "ui", "index.html")).pipe(res); }
+    if (/^\/api\//.test(p)) { var deny = localOnly(req); if (deny) { glog("refused " + req.method + " " + p + " — " + deny); return send(res, 403, { error: "refused: " + deny }); } }
+    if (req.method === "OPTIONS") { res.writeHead(204, SEC_HEADERS); return res.end(); }
+    if (req.method === "GET" && p === "/api/state") return send(res, 200, { config: config, health: health, running: running, scan: lastScan, boot: BOOT_TS, version: PKG.version, update: updateCheck(false), jobs: jobs.map(function (j) { var o = Object.assign({}, j); delete o.candidate; o.log = j.log.slice(-3); return o; }) });
     if (req.method === "GET" && p === "/api/titles") return send(res, 200, { output: { root: "", source: "each title's Output\\ folder" }, titles: allTitles().map(function (t) { var o = Object.assign({}, t); delete o.specials; delete o.bd; o.archived = (config.archived || []).indexOf(t.titleFolder) >= 0; o.sections = t.specials.map(function (s) { return { name: s.name, type: s.type, done: s.done, sec: Math.round((s.t1 - s.t0) / 100) / 10 }; }); return o; }) });
     if (req.method === "GET" && p === "/api/logs") return send(res, 200, { file: LOGFILE, lines: GLOG.slice(-600) });
     if (req.method === "GET" && p === "/api/upscaler/workflow") return send(res, 200, { ok: true, workflow: config.upscaler.workflow || UP.WORKFLOW, custom: !!config.upscaler.workflow, defaults: UP.WORKFLOW });
@@ -642,7 +1003,11 @@ var server = http.createServer(function (req, res) {
     return body(req).then(function (b) {
         if (req.method !== "POST") return send(res, 404, "not found");
         switch (p) {
-            case "/api/download": { var dj = enqueueDownload(b.titleFolder); return send(res, 200, { ok: !!dj, job: dj ? dj.id : null }); }
+            case "/api/download": { var dj = enqueueDownload(b.titleFolder); return send(res, 200, { ok: !!dj, job: dj ? dj.id : null, skip: dj ? "" : "already queued or running" }); }
+            case "/api/titles/refresh": { invalidateTitles(); return send(res, 200, { ok: true }); }
+            case "/api/update/check": { return send(res, 200, { ok: true, update: updateCheck(true) }); }
+            case "/api/update/apply": { return applyUpdate(b.file, { restart: b.restart !== false, git: b.git !== false, force: !!b.force, log: glog }).then(function (rec) { send(res, 200, { ok: true, applied: rec, restarting: b.restart !== false }); }, function (e) { send(res, 400, { ok: false, error: e.message }); }); }
+            case "/api/restart": { if (running) return send(res, 400, { ok: false, error: "the queue is busy" }); send(res, 200, { ok: true }); return restartSelf("requested from the UI"); }
             case "/api/grab/scan": return G.scan(grabOpts()).then(function (r) { if (r.ok) { r.scannedAt = new Date().toISOString(); r.candidates = (r.candidates || []).map(function (c) { c.queued = jobs.some(function (j) { return j.grab && j.cardId === c.cardId && (j.state === "queued" || j.state === "running"); }); return c; }); lastScan = r; } send(res, 200, r); }).catch(function (e) { send(res, 200, { ok: false, error: String(e && e.message || e) }); });
             case "/api/_debug_scan": if (process.env.RUVI_DEBUG !== "1") return send(res, 404, "not found"); lastScan = b; return send(res, 200, { ok: true });
             case "/api/grab/run": { if (!lastScan) return send(res, 400, { error: "scan the board first" }); var ids = b.cardIds || []; return send(res, 200, { ok: true, queued: enqueueGrab(lastScan.candidates.filter(function (c) { return ids.indexOf(c.cardId) >= 0; })) }); }
@@ -662,7 +1027,16 @@ var server = http.createServer(function (req, res) {
                 });
                 return send(res, 200, { ok: !!jR, queued: !!jR, skip: jR ? "" : "already queued or running" }); }
             case "/api/heal-base": { TREE = healBase(function (m) { glog(m); }); return send(res, 200, { ok: true, report: TREE }); }
-            case "/api/ai/import": { return send(res, 200, importAiImages(b.titleFolder, b.from)); }
+            case "/api/ai/import": { invalidateTitles(); return send(res, 200, importAiImages(b.titleFolder, b.from)); }
+            case "/api/ai/prompts": { return send(res, 200, aiPrompts(b.titleFolder)); }
+            case "/api/ai/prompt": { return send(res, 200, editPrompt(b.titleFolder, b.image, b.prompt)); }
+            case "/api/imagegen/models": { var kM = secretsJson().geminiKey; if (!kM) return send(res, 400, { ok: false, error: "no geminiKey in _SECRETS\\secrets.json" }); return IG.listModels(kM).then(function (r) { send(res, 200, { ok: true, models: r.image, known: IG.KNOWN_MODELS, total: r.all }); }, function (e) { send(res, 400, { ok: false, error: e.message }); }); }
+            case "/api/imagegen/run": { var chG = channelOf(b.titleFolder), onlyG = Array.isArray(b.only) && b.only.length ? b.only : null;
+                var jG = enqueueTask("generate", path.basename(b.titleFolder) + " · generate", b.titleFolder, function (j) { return generateStage(j, chG, onlyG).then(function () { return { summary: "AI images complete" }; }); });
+                return send(res, 200, { ok: !!jG, queued: !!jG, skip: jG ? "" : "already queued or running" }); }
+            case "/api/tf/batch": { return send(res, 200, tfRecordBatch(b.titleFolder, b.images)); }
+            case "/api/tf/import": { return send(res, 200, tfImport(b.titleFolder, glog)); }
+            case "/api/tf/clear": { try { fs.unlinkSync(tfBatchPath(b.titleFolder)); } catch (e) {} invalidateTitles(); return send(res, 200, { ok: true }); }
             case "/api/upscaler/workflow": { if (b.reset) { config.upscaler.workflow = null; saveCfg(config); return send(res, 200, { ok: true, workflow: UP.WORKFLOW, custom: false }); } if (b.workflow) { config.upscaler.workflow = b.workflow; saveCfg(config); return send(res, 200, { ok: true, workflow: b.workflow, custom: true }); } return send(res, 200, { ok: true, workflow: config.upscaler.workflow || UP.WORKFLOW, custom: !!config.upscaler.workflow, defaults: UP.WORKFLOW }); }
             case "/api/upscale": { var ju = enqueueUpscale(b.titleFolder); return send(res, 200, { ok: !!ju, id: ju && ju.id, skip: ju ? "" : "already queued or running" }); }
             case "/api/sfx/fetch": { var tS = ST.readTitle(b.titleFolder); if (!tS.sfx) return send(res, 400, { error: "no _sfx.json in the package yet" });
@@ -670,13 +1044,13 @@ var server = http.createServer(function (req, res) {
                 return send(res, 200, { ok: !!jS, queued: !!jS, skip: jS ? "" : "already queued or running" }); }
             case "/api/stop": { if (current) { current.abort.soft = true; log(current, "stop requested — finishing the current step"); if (current.dlHandle) current.dlHandle.cancel(); } return send(res, 200, { ok: !!current }); }
             case "/api/kill": { if (current) { current.abort.aborted = true; log(current, "KILL requested — aborting now"); if (current.dlHandle) current.dlHandle.cancel(); } jobs.forEach(function (x) { if (x.state === "queued") x.state = "cancelled"; }); return send(res, 200, { ok: true }); }
-            case "/api/render": { var j = enqueue(b.titleFolder, !!b.force); return send(res, 200, { ok: !!j, job: j ? j.id : null }); }
-            case "/api/render-all": { var arch = config.archived || []; var n = 0; allTitles().forEach(function (t) { if (t.ready && !t.finished && arch.indexOf(t.titleFolder) < 0 && (b.force || t.rendered < t.total)) { if (enqueue(t.titleFolder, !!b.force)) n++; } }); return send(res, 200, { ok: true, queued: n }); }
-            case "/api/archive": { var list = (config.archived || []).filter(function (x) { return x !== b.titleFolder; }); if (b.on !== false) list.push(b.titleFolder); config.archived = list; saveCfg(config); return send(res, 200, { ok: true, archived: b.on !== false, count: list.length }); }
-            case "/api/unpack": { try { var up2 = unpackPackage(b.titleFolder); return send(res, up2.ok ? 200 : 400, up2); } catch (e) { return send(res, 500, { error: e.message }); } }
-            case "/api/open": if (b.path && fs.existsSync(b.path)) open(b.path); return send(res, 200, { ok: true });
+            case "/api/render": { invalidateTitles(); var j = enqueue(b.titleFolder, !!b.force); return send(res, 200, { ok: !!j, job: j ? j.id : null, skip: j ? "" : "already queued or running" }); }
+            case "/api/render-all": { var arch = config.archived || []; var n = 0; allTitles().forEach(function (t) { if (t.ready && !t.finished && arch.indexOf(t.titleFolder) < 0 && (b.force || !t.finished)) { if (enqueue(t.titleFolder, !!b.force)) n++; } }); return send(res, 200, { ok: true, queued: n }); }
+            case "/api/archive": { var list = (config.archived || []).filter(function (x) { return x !== b.titleFolder; }); if (b.on !== false) list.push(b.titleFolder); config.archived = list; saveCfg(config); invalidateTitles(); return send(res, 200, { ok: true, archived: b.on !== false, count: list.length }); }
+            case "/api/unpack": { try { invalidateTitles(); var up2 = unpackPackage(b.titleFolder); return send(res, up2.ok ? 200 : 400, up2); } catch (e) { return send(res, 500, { error: e.message }); } }
+            case "/api/open": { var okO = openAllowed(b.path); if (okO) open(path.resolve(b.path)); return send(res, okO ? 200 : 403, { ok: okO, error: okO ? "" : "only folders and plain files under the base folder can be opened" }); }
             case "/api/remove": jobs = jobs.filter(function (j) { return j.id !== b.id || j.state === "running"; }); return send(res, 200, { ok: true });
-            case "/api/config": { var oldBase = config.base; config = deepMerge(config, b.config || {}); saveCfg(config); config = loadCfg(); FF.configure(config); if (config.base !== oldBase) { TREE = healBase(function (m) { glog(m); }); glog("base changed: " + oldBase + " → " + config.base); whisperCheck(true); } return checkHealth().then(function () { send(res, 200, { ok: true, config: config, health: health, tree: TREE }); }); }
+            case "/api/config": { var oldBase = config.base; if (b.config && b.config.render) { var rr = b.config.render; ["sfxUnderVoiceDb", "sfxLufs", "fps", "crf", "nvencCq", "fadeSec", "tableLean", "workers"].forEach(function (k) { if (k in rr && (rr[k] === "" || rr[k] == null || !isFinite(+rr[k]))) delete rr[k]; }); if (rr.sfxUnderVoiceDb != null && (+rr.sfxUnderVoiceDb < 6 || +rr.sfxUnderVoiceDb > 40)) rr.sfxUnderVoiceDb = 26; } config = deepMerge(config, b.config || {}); saveCfg(config); config = loadCfg(); FF.configure(config); invalidateTitles(); if (config.base !== oldBase) { TREE = healBase(function (m) { glog(m); }); glog("base changed: " + oldBase + " → " + config.base); whisperCheck(true); } return checkHealth().then(function () { send(res, 200, { ok: true, config: config, health: health, tree: TREE }); }); }
             default: return send(res, 404, "not found");
         }
     });
@@ -691,8 +1065,10 @@ checkHealth().then(function () {
         if (broken) return provisionWhisper("startup: the whisper runtime cannot start its Python (base interpreter moved) — rebuilding");
         if (!wi.tool || (wi.gpu && !wi.cuda)) return provisionWhisper("startup: " + (wi.tool ? "CUDA libraries for " + wi.gpu : "whisper-ctranslate2 missing"));
     });
-    server.listen(config.port, "127.0.0.1", function () {
-        console.log("RUVI STUDIO 3.12  →  http://localhost:" + config.port);
+    var listenTries = 0;
+    server.on("error", function (e) { if (e && e.code === "EADDRINUSE" && listenTries++ < 60) { if (listenTries === 1) console.log("port " + config.port + " is busy — waiting for the previous Ruvi Studio to exit…"); return setTimeout(function () { server.listen(config.port, "127.0.0.1"); }, 500); } console.log("server error: " + (e && e.message)); });
+    server.once("listening", function () {
+        console.log("RUVI STUDIO " + (PKG.version || "3.14") + "  →  http://localhost:" + config.port);
         console.log("  tree: " + config.base + "\\<CHANNEL>\\Titles\\<n. Title>\\{Script, Hook, Maps, Reference images, Characters, AI Images, Output}  ·  ambience: <base>\\_SFX\\ (shared by every channel; a channel's own SFX\\ overrides)");
         console.log("  base: " + config.base + (health.base ? "" : "  (NOT FOUND — edit studio.config.json)"));
         console.log("  ffmpeg: " + (health.ffmpeg || "NOT FOUND — downloading a static build into runtime\\ffmpeg"));
@@ -700,5 +1076,7 @@ checkHealth().then(function () {
         console.log("  puppeteer-core: " + (health.puppeteer ? "ok" : "MISSING — installing"));
         console.log("  whisper: " + (health.whisper || "not installed — building the runtime (uv → Python 3.11 → whisper-ctranslate2" + (PV.hasNvidia() ? " + CUDA 12 libs" : "") + ")"));
         if (process.argv.indexOf("--all") >= 0) allTitles().forEach(function (t) { if (t.ready && t.rendered < t.total) enqueue(t.titleFolder, false); });
+        var lu = readJson(path.join(HERE, "runtime", "last_update.json"), null); if (lu && lu.at && Date.now() - Date.parse(lu.at) < 120000) console.log("  updated: " + lu.zip + " (" + lu.from + " → " + lu.to + ")" + (lu.git && lu.git.note ? " · " + lu.git.note : ""));
     });
+    server.listen(config.port, "127.0.0.1");
 });
