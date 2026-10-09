@@ -94,6 +94,33 @@
   .secs span { display:inline-block; margin:1px 6px 1px 0; color:var(--faint); } .secs span.done { color:var(--good); } .secs span.def { color:var(--warn); }
   .prog { height:3px; background:rgba(255,255,255,.08); margin-top:4px; } .prog i { display:block; height:100%; background:var(--accent); }
   .log { font-size:11px; color:#9fb0c0; background:#0a0b12; padding:6px 8px; margin-top:6px; max-height:140px; overflow:auto; white-space:pre-wrap; }
+  /* ---- the log drawer (slides in from the left) ---- */
+  #logdrawer { position:fixed; top:0; left:0; bottom:0; width:min(640px, 92vw); z-index:950; background:var(--panel); border-right:1px solid var(--accent); box-shadow:12px 0 40px rgba(0,0,0,.65); transform:translateX(-102%); transition:transform .22s ease; display:flex; flex-direction:column; }
+  #logdrawer.on { transform:translateX(0); }
+  body.lowfx #logdrawer { transition:none; }
+  #logdrawer .ld-head { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:8px 10px; border-bottom:1px solid var(--line); }
+  #logdrawer .ld-head .label { margin:0 6px 0 0; }
+  #logdrawer .ld-head input[type=search] { flex:1 1 160px; min-width:120px; }
+  #logdrawer .ld-head select { background:var(--panel-2); color:var(--text); border:1px solid var(--line-soft); font:11px var(--font); padding:2px 4px; max-width:200px; }
+  #logdrawer .ld-body { flex:1; overflow:auto; padding:6px 10px; font-size:11px; line-height:1.45; background:#0a0b12; }
+  #logdrawer .ld-body div { white-space:pre-wrap; word-break:break-word; padding:1px 0; border-bottom:1px solid rgba(255,255,255,.025); }
+  #logdrawer .ld-body .ts { color:var(--faint); margin-right:6px; } #logdrawer .ld-body .jt { color:var(--accent); margin-right:4px; }
+  #logdrawer .ld-body .l-err { color:var(--bad); } #logdrawer .ld-body .l-warn { color:var(--warn); } #logdrawer .ld-body .l-ok { color:var(--good); } #logdrawer .ld-body .l-dim { color:#8d99ad; }
+  #logdrawer .ld-body .hit { background:rgba(255,210,63,.25); color:var(--text); }
+  #logdrawer .ld-foot { display:flex; align-items:center; gap:8px; padding:6px 10px; border-top:1px solid var(--line); color:var(--faint); font-size:10px; letter-spacing:.06em; }
+  #logdrawer .ld-foot .btn.on { color:var(--accent); border-color:var(--accent); }
+  #logshade { position:fixed; inset:0; z-index:940; background:rgba(3,4,10,.35); display:none; } #logshade.on { display:block; }
+  #logs-btn.has-err { color:var(--bad); border-color:rgba(255,93,138,.6); }
+  /* ---- the queue rows ---- */
+  .job { padding:7px 4px 8px; border-bottom:1px solid var(--line); }
+  .job .jl1 { display:flex; align-items:center; gap:8px; } .job .jl1 .name { flex:1; min-width:0; font-size:12px; color:var(--text); white-space:normal; line-height:1.3; }
+  .job .jl1 .eta { white-space:nowrap; } .job .jl1 .st { flex:none; }
+  .job .jl2 { display:flex; flex-wrap:wrap; align-items:center; gap:3px 0; margin:4px 0 0 0; } .job .jl2 .stg { margin-right:0; padding:1px 6px; }
+  .job .jl3 { margin-top:3px; } .job .jl3 .why { display:block; color:var(--faint); font-size:11px; white-space:normal; }
+  .job.failed .jl3 .why { color:var(--bad); } .job .prog { margin-top:4px; }
+  .job .log { max-height:220px; }
+  /* room for the pixbar at the bottom; the tools row never hides under it */
+  body { padding-bottom:44px; }
   .empty { color:var(--faint); padding:10px 4px; }
   details.cfg summary { cursor:pointer; color:var(--faint); text-transform:uppercase; letter-spacing:1px; font-size:11px; } .cfg label { display:inline-flex; flex-direction:column; gap:2px; font-size:11px; color:var(--faint); margin:6px 14px 4px 0; vertical-align:top; } .cfg input[type=text] { min-width:260px; }
 
@@ -218,7 +245,7 @@
     <button class="btn" id="mute-btn" title="button and completion sounds on / off">🔊</button>
     <button class="btn" id="fx-btn" title="visual effects on / off (scanlines, glows, animations) — off = lighter on the GPU while a render runs">✨</button>
     <button class="btn" id="tour-btn" title="a quick tour of every cell and button"><svg class="ic"><use href="#i-compass"/></svg> tour</button>
-    <button class="btn" id="logs-btn" title="the app's log (grab, fetches, renders)"><svg class="ic"><use href="#i-log"/></svg> logs</button>
+    <button class="btn" id="logs-btn" title="the app's log, live (L)"><svg class="ic"><use href="#i-log"/></svg> logs</button>
     <button class="btn" id="settings-btn" title="every setting: video, engine, voice, whisper, upscaler, paths"><svg class="ic"><use href="#i-cog"/></svg> settings</button>
     <button class="btn" id="update-btn" title="drop a RuviStudio_*_update.zip into the app's updates folder (or Downloads) and press this: the app updates itself, pushes to GitHub and restarts"><svg class="ic"><use href="#i-spark"/></svg> update</button>
     <button class="btn" id="stop-btn" title="finish the section being rendered, then stop"><svg class="ic"><use href="#i-stop"/></svg> stop after section</button>
@@ -228,7 +255,17 @@
 </header>
 <main>
   <div class="banner" id="banner"><div id="banner-text"></div><div class="pbar"><i id="banner-bar" style="width:0"></i></div></div>
-  <div class="card" id="logs-card" style="display:none"><div class="label">Logs <span id="logs-file" style="color:var(--faint);text-transform:none;letter-spacing:0"></span> <button class="btn" id="logs-refresh">refresh</button> <button class="btn" id="logs-close">close</button></div><div class="log" id="logs-body" style="max-height:320px"></div></div>
+  <div id="logshade"></div>
+  <aside id="logdrawer" aria-label="app log">
+    <div class="ld-head"><span class="label"><svg class="ic"><use href="#i-log"/></svg> LOG</span>
+      <input type="search" id="ld-q" placeholder="filter… (text or /regex/)" />
+      <select id="ld-level" title="which lines"><option value="all">all lines</option><option value="err">errors only</option><option value="warn">errors + warnings</option><option value="ok">done / ✓ only</option></select>
+      <select id="ld-job" title="one job's lines, or everything"><option value="">every job + the app</option></select>
+      <button class="btn" id="ld-copy" title="copy the visible lines">copy</button> <button class="btn" id="ld-file" title="open today's log file">file</button> <button class="btn" id="ld-folder" title="open the logs folder">folder</button> <button class="btn" id="ld-close" title="close (Esc)">✕</button>
+    </div>
+    <div class="ld-body" id="ld-body"></div>
+    <div class="ld-foot"><button class="btn on" id="ld-follow" title="keep the newest line in view (pauses when you scroll up)">follow</button> <button class="btn" id="ld-end" title="jump to the newest line">end</button> <button class="btn" id="ld-clear" title="hide what is on screen now (the file keeps everything)">clear view</button> <span id="ld-count"></span> <span id="ld-path" style="margin-left:auto;text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50%"></span></div>
+  </aside>
   <div class="toptabs" id="toptabs"><button class="toptab on" data-pane="studio"><svg class="ic"><use href="#i-film"/></svg> STUDIO</button><button class="toptab" data-pane="upscaler"><svg class="ic"><use href="#i-spark"/></svg> UPSCALER <b id="up-badge"></b></button><button class="toptab" data-pane="settings"><svg class="ic"><use href="#i-cog"/></svg> SETTINGS</button></div>
   <div id="pane-studio">
     <div class="grid">
@@ -246,7 +283,7 @@
         <div class="tools">
       <button class="tab on" data-f="todo">to do <b id="n-todo"></b></button><button class="tab" data-f="rendered">done <b id="n-rendered"></b></button><button class="tab" data-f="notready">not ready <b id="n-notready"></b></button><button class="tab" data-f="archived">archived <b id="n-archived"></b></button><button class="tab" data-f="all">all <b id="n-all"></b></button>
       <input type="search" id="q" placeholder="search title / channel…  ( / )" /><button class="btn" id="refresh">refresh</button><span id="scan-note" style="color:var(--faint)"></span>
-      <span class="hint" style="margin:0 0 0 auto">stages: <span class="stg todo"><i>○</i>will run</span> <span class="stg done"><i>✓</i>done</span> <span class="stg blocked"><i>✗</i>blocked</span> <span class="stg pending"><i>·</i>after an earlier stage</span> <span class="stg skip"><i>–</i>not for this channel</span></span>
+      <button class="btn" style="margin:0 0 0 auto" title="stages under each title:  ○ will run   ✓ done   ✗ blocked (the red line says why)   · waits for an earlier stage   – not for this channel.  RUN does every ○ stage in order: generate → upscale (painted channels) → images → ambience → render → final.">? stages</button>
     </div>
         <div id="titles"><div class="empty">scanning the base folder…</div></div>
       </section>
@@ -387,9 +424,9 @@
   function runningJob(t) { return (state && state.jobs || []).filter(function (j) { return j.titleFolder === t.titleFolder && !j.download && !j.upscale && j.task !== "sfx" && (j.state === "running" || j.state === "queued"); })[0] || null; }
   function fmtDur(s) { s = Math.max(0, Math.round(s)); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + "h " + String(m).padStart(2, "0") + "m" : (m ? m + " min" : s + " s"); }
   function etaOf(j) {   // from the running stage's rate; falls back to the job's parts counter
-    var st = (j.stages || []).filter(function (x) { return x.state === "running" && x.total && x.done; })[0];
-    if (st && st.startedAt) { var el = (Date.now() - st.startedAt) / 1000, rate = st.done / Math.max(1, el); return rate > 0 ? fmtDur((st.total - st.done) / rate) : ""; }
-    if (j.startedAt && j.total && j.done) { var el2 = (Date.now() - j.startedAt) / 1000; return fmtDur((j.total - j.done) / (j.done / Math.max(1, el2))); }
+    var st = (j.stages || []).filter(function (x) { return x.state === "running" && x.total && x.done > 0 && x.done < x.total; })[0];
+    if (st && st.startedAt) { var el = (Date.now() - st.startedAt) / 1000; if (el < 3) return ""; var rate = st.done / el, left = (st.total - st.done) / rate; return left >= 1 ? fmtDur(left) : ""; }
+    if (!(j.stages && j.stages.length) && j.startedAt && j.total && j.done > 0 && j.done < j.total) { var el2 = (Date.now() - j.startedAt) / 1000; if (el2 < 3) return ""; var left2 = (j.total - j.done) / (j.done / el2); return left2 >= 1 ? fmtDur(left2) : ""; }
     return "";
   }
   var menuFor = null;
@@ -400,7 +437,7 @@
   }
   function closeMenu() { $("menu").style.display = "none"; menuFor = null; }
   document.addEventListener("click", function (e) { if ($("menu").style.display === "block" && !e.target.closest("#menu") && e.target !== menuFor && !(menuFor && menuFor.contains(e.target))) closeMenu(); }, true);
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); if (e.key === "/" && e.target && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); $("q").focus(); $("q").select(); } });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { closeMenu(); if (typeof LD !== "undefined" && LD.open) ldOpen(false); } if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return; if (e.key === "/") { e.preventDefault(); $("q").focus(); $("q").select(); } if ((e.key === "l" || e.key === "L") && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); ldOpen(!LD.open); } });
   window.addEventListener("scroll", closeMenu, true);
   function stateOf(t) { var job = (state && state.jobs || []).filter(function (j) { return j.titleFolder === t.titleFolder && !j.download && (j.state === "running" || j.state === "queued"); })[0]; if (job) return job.state; if (!t.ready) return "notready"; if (t.total && t.rendered === t.total) return "rendered"; return t.rendered ? "partial" : "ready"; }
   function bucket(t) { if (t.archived) return "archived"; var s = stateOf(t); if (s === "running" || s === "queued" || s === "ready" || s === "partial") return "todo"; return s; }
@@ -498,18 +535,22 @@
   function renderJobs(force) {
     var jobsK = JSON.stringify((state && state.jobs) || []) + JSON.stringify(openJ) + Math.floor(Date.now() / 15000); if (!force && jobsK === lastJobsHtmlKey) return; lastJobsHtmlKey = jobsK;   // the ETA line refreshes every 15 s on its own
     var el = $("jobs"), jobs = (state && state.jobs) || []; el.innerHTML = jobs.length ? "" : '<div class="empty">nothing running — RUN on a title, or RUN ALL TO-DO</div>';
-    var tbl = document.createElement("table"), tb = document.createElement("tbody"); tbl.appendChild(tb); if (jobs.length) el.appendChild(tbl);
     jobs.slice().reverse().forEach(function (j) {
-      var tr = document.createElement("tr"), pct = j.total ? Math.round(j.done / j.total * 100) : 0, eta = j.state === "running" ? etaOf(j) : "", kind = j.grab ? "grab" : j.download ? "images" : j.upscale ? "upscale" : j.task === "sfx" ? "ambience" : j.task ? j.task : "";
-      var stages = (j.stages && j.stages.length) ? '<div class="job-stages">' + j.stages.map(function (x) { return '<span class="stg ' + esc(x.state) + '" title="' + esc(x.key + ": " + x.state) + '"><i>' + (STAGE_ICON[x.state] || "·") + '</i>' + esc(x.key) + (x.total ? ' <b>' + x.done + '/' + x.total + '</b>' : "") + '</span>'; }).join("") + '</div>' : "";
-      tr.innerHTML = '<td class="t"><span class="name">' + (kind ? '<span class="stg">' + esc(kind) + '</span> ' : "") + esc(j.title) + '</span>' + stages + '<span class="why' + (j.state === "failed" ? " blockline" : "") + '">' + esc(j.error || j.detail || "") + '</span>' + (j.total && j.state === "running" ? '<div class="prog"><i style="width:' + pct + '%"></i></div>' : "") + '</td><td class="c">' + (j.total ? ("<b>" + j.done + "/" + j.total + "</b>") : "") + (eta ? '<br><span class="eta">~' + esc(eta) + '</span>' : (j.startedAt && j.state !== "running" && j.state !== "queued" ? '<br><span class="eta">' + esc(fmtDur(((j.endedAt || Date.now()) - j.startedAt) / 1000)) + '</span>' : "")) + '</td><td class="s"><span class="st ' + esc(j.state) + '">' + esc(j.state) + '</span></td><td class="a"><button class="btn" data-a="log">' + (openJ[j.id] ? "hide" : "log") + '</button> ' + (j.state !== "running" ? '<button class="btn" data-a="remove" title="remove from the list">×</button>' : "") + '</td>';
-      tr.addEventListener("click", function (e) { var a = e.target.getAttribute("data-a"); if (!a) return; if (a === "log") { openJ[j.id] = !openJ[j.id]; renderJobs(); if (openJ[j.id]) api("/api/log/" + j.id).then(function (r) { var l = document.getElementById("log-" + j.id); if (l) l.textContent = (r.log || []).join("\n"); }); } if (a === "remove") api("/api/remove", { id: j.id }).then(refresh); });
-      tb.appendChild(tr);
-      if (openJ[j.id]) { var d = document.createElement("tr"); d.className = "detail"; d.innerHTML = '<td colspan="4"><div class="log" id="log-' + j.id + '">' + esc((j.log || []).join("\n")) + '</div></td>'; tb.appendChild(d); }
+      var d = document.createElement("div"), pct = j.total ? Math.round(j.done / j.total * 100) : 0, eta = j.state === "running" ? etaOf(j) : "", kind = j.grab ? "grab" : j.download ? "images" : j.upscale ? "upscale" : j.task === "sfx" ? "ambience" : j.task ? j.task : "";
+      d.className = "job " + esc(j.state);
+      var stages = (j.stages && j.stages.length) ? '<div class="jl2">' + j.stages.map(function (x, i) { return (i ? '<svg class="ic arr"><use href="#i-arrow"/></svg>' : "") + '<span class="stg ' + esc(x.state) + '" title="' + esc(x.key + ": " + x.state) + '"><i>' + (STAGE_ICON[x.state] || "·") + '</i>' + esc(x.key) + (x.total ? ' <b>' + x.done + '/' + x.total + '</b>' : "") + '</span>'; }).join("") + '</div>' : "";
+      var elapsed = j.startedAt && j.state !== "running" && j.state !== "queued" ? fmtDur(((j.endedAt || Date.now()) - j.startedAt) / 1000) : "";
+      d.innerHTML = '<div class="jl1">' + (kind ? '<span class="stg">' + esc(kind) + '</span>' : "") + '<span class="name">' + esc(j.title) + '</span>' + (j.total && j.state === "running" ? '<b style="white-space:nowrap">' + j.done + '/' + j.total + '</b>' : "") + (eta ? '<span class="eta">~' + esc(eta) + ' left</span>' : (elapsed ? '<span class="eta">' + esc(elapsed) + '</span>' : "")) + '<span class="st ' + esc(j.state) + '">' + esc(j.state) + '</span><button class="btn" data-a="log">' + (openJ[j.id] ? "hide" : "log") + '</button>' + (j.state !== "running" ? '<button class="btn" data-a="remove" title="remove from the list">×</button>' : "") + '</div>'
+        + stages + '<div class="jl3"><span class="why">' + esc(j.error || j.detail || "") + '</span>' + (j.total && j.state === "running" ? '<div class="prog"><i style="width:' + pct + '%"></i></div>' : "") + '</div>';
+      d.addEventListener("click", function (e) { var a = e.target.getAttribute("data-a"); if (a === "log") { openJ[j.id] = !openJ[j.id]; renderJobs(true); } if (a === "remove") api("/api/remove", { id: j.id }).then(refresh); });
+      el.appendChild(d);
+      if (openJ[j.id]) { var pre = document.createElement("pre"); pre.className = "log"; pre.textContent = (j.log || []).join("\n"); d.appendChild(pre); api("/api/log/" + j.id).then(function (r) { pre.textContent = (r.log || []).join("\n"); pre.scrollTop = pre.scrollHeight; }); }
     });
     var nq = jobs.filter(function (j) { return j.state === "queued"; }).length, nr = jobs.filter(function (j) { return j.state === "running"; }).length, nd = jobs.filter(function (j) { return j.state === "done"; }).length, nf = jobs.filter(function (j) { return /failed|killed|stopped/.test(j.state); }).length;
     $("jobs-sum").textContent = jobs.length ? ("· " + (nr ? nr + " running · " : "") + nq + " queued · " + nd + " done" + (nf ? " · " + nf + " failed" : "")) : ""; $("jobs-clear").style.display = jobs.some(function (j) { return j.state !== "running" && j.state !== "queued"; }) ? "" : "none";
   }
+  var noteAt = Date.now(); try { new MutationObserver(function () { noteAt = Date.now(); }).observe($("scan-note"), { childList: true, characterData: true, subtree: true }); } catch (e) {}
+  setInterval(function () { if ($("scan-note").textContent && Date.now() - noteAt > 14000) $("scan-note").textContent = ""; }, 3000);
   var updState = null, restarting = false, bootSeen = null;
   function cmpVer(a, b) { var x = String(a).split(".").map(Number), y = String(b).split(".").map(Number); for (var i = 0; i < 3; i++) { var d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; }
   var lastUpdKey = "";
@@ -636,8 +677,50 @@
   $("up-open").onclick = function () { var u = $("up-url").value.trim(); if (u) window.open(u, "_blank"); else $("up-note").textContent = "set the Vercel URL first"; };
   $("up-embed").onclick = function () { var u = $("up-url").value.trim(); if (!u) { $("up-note").textContent = "set the Vercel URL first"; return; } var w = $("up-frame-wrap"); w.style.display = w.style.display === "none" ? "" : "none"; if (w.style.display !== "none") $("up-frame").src = u; };
   function loadTitles() { return api("/api/titles").then(function (r) { titles = r.titles || []; output = r.output || null; renderTitles(); if ($("pane-upscaler").style.display !== "none") renderUpscaler(); else { var raw = 0; titles.forEach(function (t) { if (t.upscale && t.upscale.enabled !== false) raw += t.upscale.raw; }); $("up-badge").textContent = raw ? String(raw) : ""; } }); }
-  function showLogs() { $("logs-card").style.display = ""; api("/api/logs").then(function (r) { $("logs-file").textContent = "· " + (r.file || ""); $("logs-body").textContent = (r.lines || []).join("\n"); $("logs-body").scrollTop = $("logs-body").scrollHeight; }); }
-  $("logs-btn").onclick = showLogs; $("logs-refresh").onclick = showLogs; $("logs-close").onclick = function () { $("logs-card").style.display = "none"; };
+  /* ---- the log drawer: tails /api/logs?after=<seq> every 2 s while open; filter, level, per-job view, follow ---- */
+  var LD = { open: false, seq: 0, lines: [], follow: true, timer: null, hidden: 0, errSeen: 0 };
+  function ldClass(l) { if (/FAILED|refused|✗|could not|cannot|error|exception|fatal|killed|blocked by/i.test(l)) return "l-err"; if (/retry|waiting|rate-limit|warn|stopped|skipp|missing|not found/i.test(l)) return "l-warn"; if (/✓|DONE|done —|complete|pushed|applied|ready/i.test(l)) return "l-ok"; return ""; }
+  function ldMatch(l) {
+    var q = $("ld-q").value.trim(), lv = $("ld-level").value, job = $("ld-job").value;
+    if (job && l.indexOf("[" + job + "]") < 0) return false;
+    var c = ldClass(l); if (lv === "err" && c !== "l-err") return false; if (lv === "warn" && c !== "l-err" && c !== "l-warn") return false; if (lv === "ok" && c !== "l-ok") return false;
+    if (!q) return true; var m = /^\/(.+)\/([a-z]*)$/.exec(q); if (m) { try { return new RegExp(m[1], m[2]).test(l); } catch (e) { return true; } } return l.toLowerCase().indexOf(q.toLowerCase()) >= 0;
+  }
+  function ldRender() {
+    var body = $("ld-body"), q = $("ld-q").value.trim(), rx = null; var m = /^\/(.+)\/([a-z]*)$/.exec(q); if (q && !m) rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"); else if (m) { try { rx = new RegExp(m[1], m[2].replace("g", "") + "g"); } catch (e) { rx = null; } }
+    var shown = LD.lines.slice(LD.hidden).filter(ldMatch), html = shown.slice(-2500).map(function (l) {
+      var ts = l.slice(0, 8), rest = l.slice(9), jt = /^\[([^\]]{1,40})\]\s?/.exec(rest), txt = jt ? rest.slice(jt[0].length) : rest, h = esc(txt);
+      if (rx) h = h.replace(rx, function (x) { return '<span class="hit">' + x + '</span>'; });
+      return '<div class="' + ldClass(l) + '"><span class="ts">' + esc(ts) + '</span>' + (jt ? '<span class="jt">' + esc(jt[1]) + '</span>' : "") + h + '</div>';
+    }).join("");
+    body.innerHTML = html || '<div class="l-dim">' + (LD.lines.length ? "nothing matches" : "no log lines yet") + '</div>';
+    $("ld-count").textContent = shown.length + " / " + (LD.lines.length - LD.hidden) + " line(s)";
+    if (LD.follow) body.scrollTop = body.scrollHeight;
+    var jobs = {}; LD.lines.forEach(function (l) { var j = /^.{8} \[([^\]]{1,40})\]/.exec(l); if (j) jobs[j[1]] = (jobs[j[1]] || 0) + 1; });
+    var sel = $("ld-job"), cur = sel.value, opts = Object.keys(jobs).sort(function (a, b) { return jobs[b] - jobs[a]; }); if (sel.dataset.sig !== opts.join("|")) { sel.dataset.sig = opts.join("|"); sel.innerHTML = '<option value="">every job + the app</option>' + opts.map(function (k) { return '<option value="' + esc(k) + '">' + esc(k) + " (" + jobs[k] + ")</option>"; }).join(""); sel.value = cur; }
+  }
+  function ldPoll() {
+    fetch("/api/logs?after=" + LD.seq, { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (r) {
+      if (r.reset) { LD.lines = r.lines || []; LD.hidden = 0; } else if (r.lines && r.lines.length) { LD.lines = LD.lines.concat(r.lines); if (LD.lines.length > 4000) { var cut = LD.lines.length - 4000; LD.lines = LD.lines.slice(cut); LD.hidden = Math.max(0, LD.hidden - cut); } }
+      LD.seq = r.seq || LD.seq; $("ld-path").textContent = r.file || ""; $("ld-path").title = r.file || "";
+      if (LD.open) ldRender();
+      var errs = LD.lines.filter(function (l) { return ldClass(l) === "l-err"; }).length; $("logs-btn").classList.toggle("has-err", errs > LD.errSeen && !LD.open); if (LD.open) LD.errSeen = errs;
+    }).catch(function () {});
+  }
+  function ldOpen(on) {
+    LD.open = on; $("logdrawer").classList.toggle("on", on); $("logshade").classList.toggle("on", on);
+    if (on) { ldPoll(); LD.timer = setInterval(ldPoll, 2000); setTimeout(function () { $("ld-q").focus(); }, 250); $("logs-btn").classList.remove("has-err"); } else { clearInterval(LD.timer); LD.timer = null; }
+  }
+  $("logs-btn").onclick = function () { ldOpen(!LD.open); }; $("ld-close").onclick = function () { ldOpen(false); }; $("logshade").onclick = function () { ldOpen(false); };
+  $("ld-q").addEventListener("input", ldRender); $("ld-level").addEventListener("change", ldRender); $("ld-job").addEventListener("change", ldRender);
+  $("ld-follow").onclick = function () { LD.follow = !LD.follow; this.classList.toggle("on", LD.follow); if (LD.follow) $("ld-body").scrollTop = $("ld-body").scrollHeight; };
+  $("ld-end").onclick = function () { LD.follow = true; $("ld-follow").classList.add("on"); $("ld-body").scrollTop = $("ld-body").scrollHeight; };
+  $("ld-clear").onclick = function () { LD.hidden = LD.lines.length; ldRender(); };
+  $("ld-copy").onclick = function () { var txt = LD.lines.slice(LD.hidden).filter(ldMatch).join("\n"); copyText(txt).then(function (ok) { $("ld-count").textContent = ok ? "copied " + txt.split("\n").length + " line(s)" : "copy failed"; }); };
+  $("ld-file").onclick = function () { if ($("ld-path").textContent) api("/api/open", { path: $("ld-path").textContent }); };
+  $("ld-folder").onclick = function () { var f = $("ld-path").textContent; if (f) api("/api/open", { path: f.replace(/[\\/][^\\/]+$/, "") }); };
+  $("ld-body").addEventListener("scroll", function () { var b = $("ld-body"), atEnd = b.scrollHeight - b.scrollTop - b.clientHeight < 24; if (!atEnd && LD.follow) { LD.follow = false; $("ld-follow").classList.remove("on"); } else if (atEnd && !LD.follow) { LD.follow = true; $("ld-follow").classList.add("on"); } });
+  setInterval(function () { if (!LD.open && !restarting) ldPoll(); }, 15000);   // the button turns red when new errors arrive while the drawer is closed
   $("stop-btn").onclick = function () { api("/api/stop", {}).then(refresh); }; $("kill-btn").onclick = function () { if (confirm("Kill the current render now and drop the queue?")) api("/api/kill", {}).then(refresh); };
   Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (b) { if (b.getAttribute("data-f") === filter) { Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (x) { x.className = "tab" + (x === b ? " on" : ""); }); } b.addEventListener("click", function () { filter = b.getAttribute("data-f"); try { localStorage.setItem("ruvi_filter", filter); } catch (e) {} Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (x) { x.className = "tab" + (x === b ? " on" : ""); }); renderTitles(); }); });
   $("q").addEventListener("input", function () { q = this.value; renderTitles(); });
@@ -721,7 +804,7 @@
   /* ---- the tour (TurboFlow-style: a card per cell, dots, next/back/skip; auto on first visit) ---- */
   var TOUR = [
     { sel: "#cell-grab", pane: "studio", title: "Trello grab", text: "Scan the board to list the cards under each channel marker, tick the ones you want and grab: the app downloads the script, VO and cover, runs whisper on the GPU, measures the channel's ambience folder and writes Script\\packet.zip — the one file you drop into the writing-room chat. heal tree rebuilds any missing folder; index SFX measures the ambience folders; refresh SFX & CTA rewrites every packet." },
-    { sel: "#cell-jobs", pane: "studio", title: "Queue", text: "Every job lands here with its stage board (upscale · images · ambience · render · final), progress and an ETA. log opens a job's own log; stop after section and kill now in the header act on the running job; clear removes the finished ones." },
+    { sel: "#cell-jobs", pane: "studio", title: "Queue", text: "Every job lands here with its stage board (generate · upscale · images · ambience · render · final), progress and an ETA. log opens a job's own log; the LOGS button (or the L key) slides the live app log in from the left with filters, levels and a per-job view; stop after section and kill now in the header act on the running job; clear removes the finished ones." },
     { sel: "#cell-titles", pane: "studio", title: "Titles", text: "Every title under <base>\\<CHANNEL>\\Titles with its CHECKLIST: upscale (painted channels only) › images › ambience › render › final. ○ will run, ✓ done, ✗ blocked (the row says why), – not for this channel. RUN does every ○ stage in order: paints the raw AI images on BILGE RATS and SCURVY DOGS (never on OLDWORLDPROOF) while the section stills and the ambience are fetched, then renders every part natively and assembles the whole video with fades, letterbox, the CTAs, the voice and the ambience bed. prompts lists the missing AI images with their prompts (copy for TurboFlow); ⋯ holds the one-off actions (fetch images, fetch ambience, upscale now, AI import, folders, archive, re-render all); more opens the full checklist with the rendered parts." },
     { sel: "#cell-updates", pane: "settings", title: "Updates", text: "Drop a RuviStudio_<version>_update.zip from the writing room into the updates folder (or just leave it in Downloads) and press UPDATE in the header: every replaced file is backed up under runtime\\backup, the change is committed and pushed to GitHub when the folder is a repository, and the server restarts itself — this page reloads when it is back." },
     { sel: "#cell-imagegen", pane: "settings", title: "AI images — Gemini API", text: "With a Google AI Studio key in _SECRETS\\secrets.json (geminiKey), RUN generates the missing AI images itself from the prompts — one request per image, a few at a time, retried on quota / server errors — then upscales (pirate channels), fetches, renders. Pick the model (Nano Banana Pro by default; list models shows what the key can use), the size and the ratio; a prompt the safety filter blocks shows up in the prompts panel where it can be edited and re-run." },

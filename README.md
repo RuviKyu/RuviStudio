@@ -1,4 +1,4 @@
-# Ruvi Studio 3.16 — the whole pipeline on one PC
+# Ruvi Studio 3.17 — the whole pipeline on one PC
 
 One app: **Trello grab → packet zip → (the writing room) → package → stills + AI images → native render → the finished video.** No Adobe apps, no browser. Built from RUVI Conductor Special 2.3 + the Conductor's assembler; prompt-set **r18** (the writing room's docs and toolchain live in `writing-room/` of this repo).
 
@@ -57,6 +57,12 @@ final video (30 / 60 fps) · letterbox (none / 1.85 / 2.00 / 2.20 / 2.39) · mus
 - **One queue for everything** (3.11): renders, image fetches, ambience fetches, upscales, grabs, packet refreshes and sound indexing all run one after another through the same queue, each with its own progress, log and place in the Rendering card and in the pixel bar — pressing *sfx* or *img* while a title renders just lines it up.
 - Logs: per job (log button) and global (`runtime\logs\`).
 - `node studio.js --all` renders every ready title headless.
+
+## 3.17
+- **Log drawer**: the LOGS button (or the `L` key) slides the live app log in from the left — tailed every 2 s with a sequence cursor (`/api/logs?after=`), filter (text or `/regex/`), level (errors / errors + warnings / done), a per-job view, colour by severity, follow / end / clear view, copy, open the file or the folder; the button turns red when new errors arrive while it is closed.
+- **Queue rows** rebuilt: the title on its own line, the stage board wrapping underneath with arrow icons, the detail and the progress bar below; the ETA shows only when a stage has real progress (no more "~0 s left" at the start of a run).
+- The stage legend moved into a `? stages` tooltip so the Titles toolbar fits on one line; the page keeps room for the pixbar; status notes clear themselves after 14 s.
+- Hardening: every POST carrying a `titleFolder` is checked to be a title directory under the base folder (defence in depth behind the same-origin guard).
 
 ## 3.16.2
 - The stage strip sits under the title (the title shows in full and wraps), with arrow icons between the stages; only one TurboFlow batch can be pending across the base (the extension numbers every batch from 001) and the prompts panel says so; the Updates cell redraws only when something changed.

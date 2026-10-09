@@ -314,6 +314,7 @@ function existingRender(outBase, s) {
     }
     return "";
 }
+function underBase(tf) { try { var a = path.resolve(tf), r = path.resolve(config.base); if (process.platform === "win32") { a = a.toLowerCase(); r = r.toLowerCase(); } return a.indexOf(r + path.sep) === 0 && fs.statSync(path.resolve(tf)).isDirectory(); } catch (e) { return false; } }
 function titlesDir(ch) { var cd = path.join(config.base, ch), td = path.join(cd, TITLES); return fs.existsSync(td) ? td : cd; }
 var TITLES_CACHE = { at: 0, list: null, ttl: 1500 };
 function invalidateTitles() { TITLES_CACHE.at = 0; TITLES_CACHE.list = null; }
@@ -378,7 +379,8 @@ function healBase(log) {
 var jobs = [], running = false, health = {}, current = null, GLOG = [];
 var LOGDIR = path.join(HERE, "runtime", "logs"); try { fs.mkdirSync(LOGDIR, { recursive: true }); } catch (e) {}
 var LOGFILE = path.join(LOGDIR, "special-" + new Date().toISOString().slice(0, 10) + ".log");
-function glog(m) { var line = new Date().toISOString().slice(11, 19) + " " + m; GLOG.push(line); if (GLOG.length > 2000) GLOG.shift(); try { fs.appendFileSync(LOGFILE, line + "\n"); } catch (e) {} }
+var GLOG_SEQ = 0;
+function glog(m) { var line = new Date().toISOString().slice(11, 19) + " " + m; GLOG.push(line); GLOG_SEQ++; if (GLOG.length > 3000) GLOG.shift(); try { fs.appendFileSync(LOGFILE, line + "\n"); } catch (e) {} }
 function log(j, m) { j.log.push(new Date().toISOString().slice(11, 19) + " " + m); if (j.log.length > 400) j.log = j.log.slice(-400); j.detail = m; glog("[" + j.title.slice(0, 40) + "] " + m); }
 function enqueueDownload(tf) {
     if (jobs.some(function (j) { return j.titleFolder === tf && (j.state === "queued" || j.state === "running"); })) return null;
@@ -1000,13 +1002,18 @@ var server = http.createServer(function (req, res) {
     if (req.method === "OPTIONS") { res.writeHead(204, SEC_HEADERS); return res.end(); }
     if (req.method === "GET" && p === "/api/state") return send(res, 200, { config: config, health: health, running: running, scan: lastScan, boot: BOOT_TS, version: PKG.version, update: updateCheck(false), jobs: jobs.map(function (j) { var o = Object.assign({}, j); delete o.candidate; o.log = j.log.slice(-3); return o; }) });
     if (req.method === "GET" && p === "/api/titles") return send(res, 200, { output: { root: "", source: "each title's Output\\ folder" }, titles: allTitles().map(function (t) { var o = Object.assign({}, t); delete o.specials; delete o.bd; o.archived = (config.archived || []).indexOf(t.titleFolder) >= 0; o.sections = t.specials.map(function (s) { return { name: s.name, type: s.type, done: s.done, sec: Math.round((s.t1 - s.t0) / 100) / 10 }; }); return o; }) });
-    if (req.method === "GET" && p === "/api/logs") return send(res, 200, { file: LOGFILE, lines: GLOG.slice(-600) });
+    if (req.method === "GET" && p === "/api/logs") {   // ?after=<seq> returns only the lines logged since that sequence number (the drawer tails every 2 s)
+        var qs = new URL(req.url, "http://localhost").searchParams, after = +(qs.get("after") || 0), first = GLOG_SEQ - GLOG.length;   // sequence number of GLOG[0]
+        if (!after || after < first || after > GLOG_SEQ) return send(res, 200, { file: LOGFILE, seq: GLOG_SEQ, lines: GLOG.slice(-1500), reset: true });
+        return send(res, 200, { file: LOGFILE, seq: GLOG_SEQ, lines: GLOG.slice(after - first) });
+    }
     if (req.method === "GET" && p === "/api/upscaler/workflow") return send(res, 200, { ok: true, workflow: config.upscaler.workflow || UP.WORKFLOW, custom: !!config.upscaler.workflow, defaults: UP.WORKFLOW });
     if (req.method === "GET" && p === "/api/output") return send(res, 200, { root: "", titlesSub: TITLES, source: "title folder (Output\\)" });
     if (req.method === "GET" && /^\/api\/log\//.test(p)) { var j = jobs.filter(function (x) { return x.id === p.split("/").pop(); })[0]; return send(res, j ? 200 : 404, j ? { id: j.id, log: j.log } : { error: "no such job" }); }
     if (req.method === "POST" && p === "/api/health") return checkHealth().then(function () { send(res, 200, health); });
     if (req.method === "POST" && p === "/api/provision") { provision("requested from the UI"); return send(res, 200, { ok: true, status: PV.status() }); }
     return body(req).then(function (b) {
+        if (b && typeof b.titleFolder === "string" && !underBase(b.titleFolder)) return send(res, 400, { ok: false, error: "titleFolder is not a title under the base folder" });
         if (req.method !== "POST") return send(res, 404, "not found");
         switch (p) {
             case "/api/download": { var dj = enqueueDownload(b.titleFolder); return send(res, 200, { ok: !!dj, job: dj ? dj.id : null, skip: dj ? "" : "already queued or running" }); }
