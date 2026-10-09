@@ -991,7 +991,8 @@ function localOnly(req) {
     if (["localhost", "127.0.0.1", "::1"].indexOf(host) < 0) return "host " + (req.headers.host || "(none)") + " is not the app's loopback name";
     var origin = req.headers.origin; if (origin) { var o; try { o = new URL(origin); } catch (e) { return "bad origin"; } if (["localhost", "127.0.0.1", "[::1]"].indexOf(o.hostname.toLowerCase()) < 0) return "cross-site origin " + origin; }
     var sfs = String(req.headers["sec-fetch-site"] || "").toLowerCase(); if (sfs && sfs !== "same-origin" && sfs !== "none") return "cross-site request (" + sfs + ")";
-    if (req.method === "POST" && !/^application\/json/i.test(String(req.headers["content-type"] || ""))) return "POST bodies must be application/json";
+    var verified = sfs === "same-origin" || (origin && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin));   // the browser vouched for the page itself
+    if (req.method === "POST" && !verified && !/^application\/json/i.test(String(req.headers["content-type"] || ""))) return "POST bodies must be application/json";
     return "";
 }
 var SEC_HEADERS = { "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY", "Cache-Control": "no-store" };

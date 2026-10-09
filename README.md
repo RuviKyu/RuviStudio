@@ -58,6 +58,13 @@ final video (30 / 60 fps) · letterbox (none / 1.85 / 2.00 / 2.20 / 2.39) · mus
 - Logs: per job (log button) and global (`runtime\logs\`).
 - `node studio.js --all` renders every ready title headless.
 
+## 3.17.1 — UI pass (real screenshots, every pane)
+- The log drawer rendered under the header and the pixbar (it lived inside `<main>`'s stacking context) — moved to the page level; now it covers header and pixbar as a drawer should.
+- Three settings cells (Updates, AI images, TurboFlow) sat outside the grid and stretched full width — rebuilt as one grid; a `save all settings` button at the top; wide-cell inputs capped; native selects render dark (`color-scheme: dark`).
+- The workflow editor's load call was a bodiless POST that the request guard refused (seen in the log) — bodiless `api()` calls are GET now, and the guard no longer demands JSON for posts the browser already vouches for as same-origin (cross-site, `no-cors` and rebinding cases are still refused — re-tested).
+- Prompts panel: the status column was too narrow (the "S6 · N" label collapsed under "MISSING"); columns widened, per-row buttons stacked.
+- ⋯ menu: `upscale AI images now` says when the channel is not a painted one.
+
 ## 3.17
 - **Log drawer**: the LOGS button (or the `L` key) slides the live app log in from the left — tailed every 2 s with a sequence cursor (`/api/logs?after=`), filter (text or `/regex/`), level (errors / errors + warnings / done), a per-job view, colour by severity, follow / end / clear view, copy, open the file or the folder; the button turns red when new errors arrive while it is closed.
 - **Queue rows** rebuilt: the title on its own line, the stage board wrapping underneath with arrow icons, the detail and the progress bar below; the ETA shows only when a stage has real progress (no more "~0 s left" at the start of a run).
