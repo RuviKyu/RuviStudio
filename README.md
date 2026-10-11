@@ -58,6 +58,9 @@ final video (30 / 60 fps) · letterbox (none / 1.85 / 2.00 / 2.20 / 2.39) · mus
 - Logs: per job (log button) and global (`runtime\logs\`).
 - `node studio.js --all` renders every ready title headless.
 
+## 3.18.2 — upscaler cold start
+- RunPod's serverless workers take a minute or three to wake, and while they do the Vercel function answers every submit with "timeout" — the log showed the first 10–24 images of every batch dying in the first seconds. Those are not image failures any more: the **first image goes alone as a warm-up** (retried with a growing wait — 5, 10, 20, 40, 60 s — for up to the "cold-start patience" in Settings → Upscaler, default 300 s), the parallel wave starts the moment a job is accepted, every submit keeps the same retry during the run, and anything that still died while the workers were waking gets a **second pass** at the end when they are warm. Same speed on a warm endpoint.
+
 ## 3.18.1 — title numbering
 - **Bug**: the grab counted the used numbers in the channel *root* (`<base>\BILGE RATS`) instead of `<base>\BILGERATS\Titles\`, so it never saw the existing 1–4 and a new title restarted at 1. Fixed: numbers come from the same Titles folder the scan reads.
 - Numbering is now **continue** by default (a new title takes the number after the channel's highest, so the order on disk stays the order of production); the old gap-filling is available as `fill gaps` in Settings → Grab & whisper.
