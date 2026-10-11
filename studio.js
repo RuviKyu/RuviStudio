@@ -38,7 +38,7 @@ var DEFAULT_CFG = {
               macro: "normal",                                        // macro-lens finish on maps: off | light | normal | strong (soft edges, softer corners, light vignette)
               letterbox: 2.0, voDb: 0, zoom: 1.22, zoomDrift: 0.06, keepParts: true, sfxLufs: -31, sfxUnderVoiceDb: 26, sfxDuckDb: 2.5 },   // sfxUnderVoiceDb: the bed sits 26 dB under the measured voice (barely there)   // AI pan: zoom 1.22 = room to move; ambience bed at -31 LUFS (clearly there, well under the voice), 2.5 dB duck under the voice   // keepParts: keep Output\parts\ (the rendered sections) so a re-run only redoes what changed; false = delete it after the final video   // final video: letterbox ratio (2.0 = 60 px bars; 2.39 = 138 px), music/voice levels, AI Ken Burns zoom                 // a section whose still has no bundle object: "defaults" = plain map framing / REF pull-out; "skip" = not ready
     download: { pace: "auto", contact: "", imgNaming: "typenum", hookOriginal: true },
-    grab: { whisperModel: "", whisperDevice: "", autoInstallWhisper: true, prefetchModel: true, chatUrl: "", batched: true, batchSize: 16, computeType: "float16", shareRuntime: true, looseFiles: false },   // looseFiles false = Script\ keeps only packet.zip + the VO .mp3; shareRuntime = junction <base>\_RUNTIME\python → the app's whisper runtime for the Adobe extension   // max-speed CUDA: batched inference (16 windows per pass) in float16   // the Trello grab (RUVI Studio's stage): whisper model/device blank = the Studio's own plan (GPU + CUDA libs → distil-large-v3)   // the Navigate tab's engine one-to-one: auto pace (fast → human cadence after a 429), MAP originals / others at 3840, persistent rounds, walls, manifest. hookOriginal: the HOOK is a map now — fetch its sheet as an original like MAP (the one deliberate deviation; off = exactly 1.6.7)
+    grab: { whisperModel: "", whisperDevice: "", autoInstallWhisper: true, prefetchModel: true, chatUrl: "", batched: true, batchSize: 16, computeType: "float16", shareRuntime: true, looseFiles: false, numbering: "continue", renumberDuplicates: true },   // numbering: a new title takes max + 1 in its channel's Titles\ ("continue"), or the lowest free number ("fill-gaps"); renumberDuplicates: heal tree moves a folder whose number is already taken to the next free one   // looseFiles false = Script\ keeps only packet.zip + the VO .mp3; shareRuntime = junction <base>\_RUNTIME\python → the app's whisper runtime for the Adobe extension   // max-speed CUDA: batched inference (16 windows per pass) in float16   // the Trello grab (RUVI Studio's stage): whisper model/device blank = the Studio's own plan (GPU + CUDA libs → distil-large-v3)   // the Navigate tab's engine one-to-one: auto pace (fast → human cadence after a 429), MAP originals / others at 3840, persistent rounds, walls, manifest. hookOriginal: the HOOK is a map now — fetch its sheet as an original like MAP (the one deliberate deviation; off = exactly 1.6.7)
     upgradeLowRes: false,                                    // (kept for the older path; the Navigate engine decides sizes itself)
     upscaler: { url: "https://comfy-oil-upscaler.vercel.app", prompt: "", parallel: 10, keepRaw: true, suffix: "_painted", channels: { BILGERATS: true, SCURVYDOGS: true, OLDWORLDPROOF: false }, workflow: null },   // channels: which channels' AI images get painted; workflow: ComfyUI node parameters edited in the UPSCALER tab (null = the bundled workflow)   // Ruvi's Batch Oil Upscaler (Vercel → RunPod): the deployment URL; originals are kept in AI Images\_raw\
     imagegen: { enabled: true, model: "gemini-3-pro-image-preview", imageSize: "2K", aspectRatio: "16:9", parallel: 2, retries: 4, channels: {} },   // the AI images from Google's official Gemini API (key: _SECRETS\secrets.json "geminiKey"); channels: {NAME:false} switches a channel off
@@ -341,7 +341,7 @@ function sfxShared() { return path.join(config.base, "_SFX"); }                 
 function sfxDir(ch) { return sfxShared(); }
 function sfxDirs(ch) { var own = path.join(config.base, chanFolder(ch), SFX_DIR); return (fs.existsSync(own) && listFiles(own).some(function (f) { return /\.(mp3|wav|ogg|oga|flac|m4a|aac|opus)$/i.test(f); })) ? [own, sfxShared()] : [sfxShared()]; }   // a channel's own SFX\ (if it has files) overrides the shared one
 function secretsJson() { try { return JSON.parse(String(fs.readFileSync(path.join(config.base, "_SECRETS", "secrets.json"), "utf8")).replace(/^\uFEFF/, "")) || {}; } catch (e) { return {}; } }
-function grabOpts(extra) { return Object.assign({ baseDir: config.base, secrets: secretsJson(), channelDir: function (marker) { var d = path.join(config.base, chanFolder(marker), TITLES); try { fs.mkdirSync(d, { recursive: true }); } catch (e) {} return d; } }, extra || {}); }
+function grabOpts(extra) { return Object.assign({ baseDir: config.base, secrets: secretsJson(), numbering: (config.grab && config.grab.numbering) || "continue", channelDir: function (marker) { var d = path.join(config.base, chanFolder(marker), TITLES); try { fs.mkdirSync(d, { recursive: true }); } catch (e) {} return d; } }, extra || {}); }
 /* channel names: the Trello marker / suffix-file name has spaces ("BILGE RATS"); the folder on disk has none ("BILGERATS") */
 function chanFolder(marker) { return String(marker || "").replace(/\s+/g, ""); }
 function suffixFilePath() { return path.join(config.base, "_RUVI PROJECT FILES", "Channel_Prompt_Suffixes.txt"); }
@@ -355,6 +355,27 @@ function channelAmbienceLufs(folder) {
 }
 function chanMarker(folder) { var f = chanFolder(folder).toLowerCase(), hit = suffixMarkers().filter(function (m) { return chanFolder(m).toLowerCase() === f; })[0]; return hit || folder; }
 /* ---- the base tree: everything a fresh root needs is created or healed (folders and files) ---- */
+/* two title folders with the same number in one channel (an older grab counted from the wrong folder): the OLDEST keeps its
+   number, every later one moves to the next free number above the channel's highest — never a folder a job is using */
+function renumberDuplicates(b, log) {
+    var out = [];
+    listFiles(b).forEach(function (ch) {
+        if (/^_/.test(ch)) return; var td = path.join(b, ch, TITLES); if (!fs.existsSync(td)) return;
+        var byN = {}, maxN = 0;
+        listFiles(td).forEach(function (t) { var m = /^(\d+)\.\s/.exec(t); if (!m) return; var n = +m[1]; maxN = Math.max(maxN, n); var st; try { st = fs.statSync(path.join(td, t)); } catch (e) { return; } if (!st.isDirectory()) return; (byN[n] = byN[n] || []).push({ name: t, born: st.birthtimeMs || st.mtimeMs }); });
+        Object.keys(byN).forEach(function (n) {
+            var group = byN[n]; if (group.length < 2) return;
+            group.sort(function (a, c) { return a.born - c.born; });
+            group.slice(1).forEach(function (g) {
+                var from = path.join(td, g.name); if (jobs.some(function (j) { return j.titleFolder === from && (j.state === "queued" || j.state === "running"); })) { log("renumber: " + g.name + " is in use by a job — left as is"); return; }
+                var next = ++maxN, to = path.join(td, String(next) + ". " + g.name.replace(/^\d+\.\s*/, ""));
+                try { fs.renameSync(from, to); out.push({ channel: ch, from: g.name, to: path.basename(to) }); log("renumber: " + ch + " · \"" + g.name + "\" → \"" + path.basename(to) + "\" (number " + n + " was already taken by an older title)"); invalidateTitles(); }
+                catch (e) { log("renumber: cannot rename " + g.name + " — " + e.message); }
+            });
+        });
+    });
+    return out;
+}
 function healBase(log) {
     log = log || function () {}; var rep = { created: [], files: [], migrated: [], titlesHealed: 0, warnings: [] }, b = config.base;
     function mk(d, label) { if (!fs.existsSync(d)) { try { fs.mkdirSync(d, { recursive: true }); rep.created.push(label || d); } catch (e) { rep.warnings.push("cannot create " + d + ": " + e.message); } } }
@@ -373,7 +394,8 @@ function healBase(log) {
         listFiles(cd).forEach(function (t) { if (!/^\d+\.\s/.test(t)) return; var from = path.join(cd, t), to = path.join(cd, TITLES, t); try { if (fs.statSync(from).isDirectory() && !fs.existsSync(to)) { fs.renameSync(from, to); rep.migrated.push(chanFolder(m) + "\\" + t); } } catch (e) { rep.warnings.push("cannot move " + t + " into Titles: " + e.message); } });
     });
     listFiles(b).forEach(function (ch) { if (/^_/.test(ch)) return; var td = path.join(b, ch, TITLES); if (!fs.existsSync(td)) return; listFiles(td).forEach(function (t) { if (!/^\d+\.\s/.test(t)) return; var r = healTitleTree(path.join(td, t)); if (r.created.length) rep.titlesHealed++; }); });
-    var msg = "base tree: " + (rep.created.length ? "+" + rep.created.length + " folder(s) (" + rep.created.slice(0, 6).join(", ") + (rep.created.length > 6 ? "…" : "") + ")" : "all folders present") + (rep.files.length ? " · files: " + rep.files.join(", ") : "") + (rep.migrated.length ? " · moved into Titles: " + rep.migrated.length : "") + (rep.titlesHealed ? " · " + rep.titlesHealed + " title tree(s) healed" : "");
+    rep.renumbered = (config.grab && config.grab.renumberDuplicates === false) ? [] : renumberDuplicates(b, log);
+    var msg = "base tree: " + (rep.created.length ? "+" + rep.created.length + " folder(s) (" + rep.created.slice(0, 6).join(", ") + (rep.created.length > 6 ? "…" : "") + ")" : "all folders present") + (rep.files.length ? " · files: " + rep.files.join(", ") : "") + (rep.migrated.length ? " · moved into Titles: " + rep.migrated.length : "") + (rep.titlesHealed ? " · " + rep.titlesHealed + " title tree(s) healed" : "") + (rep.renumbered && rep.renumbered.length ? " · renumbered: " + rep.renumbered.map(function (x) { return x.from + " → " + x.to; }).join(", ") : "");
     log(msg); rep.warnings.forEach(function (w) { log("warning: " + w); }); rep.message = msg; return rep;
 }
 
